@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liga del Movimiento - Kanto (Pokédex 151 Completa, Antropometría & Fair Play)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { font-family: 'Nunito', sans-serif; }
+        .font-retro { font-family: 'Press Start 2P', monospace; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+        @keyframes pulse-badge {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px rgba(251,191,36,0.8)); }
+            50% { transform: scale(1.08); filter: drop-shadow(0 0 15px rgba(251,191,36,1)); }
+        }
+        .animate-badge { animation: pulse-badge 2s infinite; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 4px; }
+    </style>
+</head>
+<body x-data="appState()" x-init="initFirebase()" :class="getThemeBg()" class="min-h-screen flex flex-col transition-colors duration-300">
+
+    <!-- LANDING & AUTH OVERLAY -->
+    <template x-if="!currentStudentId && currentRole !== 'teacher'">
+        <div class="fixed inset-0 z-50 bg-slate-950/95 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-4xl w-full p-6 md:p-10 rounded-2xl border-4 border-amber-400 bg-slate-900 text-slate-100 shadow-2xl space-y-8 my-8">
+                
+                <template x-if="showLanding">
+                    <div class="space-y-8">
+                        <div class="text-center space-y-3">
+                            <div class="w-20 h-20 bg-amber-400 text-amber-950 border-4 border-amber-600 rounded-3xl mx-auto flex items-center justify-center text-4xl shadow-xl animate-float">
+                                ⚡
+                            </div>
+                            <span class="bg-amber-400 text-amber-950 font-retro px-3 py-1 text-[10px] uppercase rounded font-bold">
+                                🏫 Educación Física • 4º de Primaria
+                            </span>
+                            <h1 class="font-retro text-base md:text-xl text-amber-300 mt-2">LIGA DEL MOVIMIENTO - KANTO</h1>
+                            <p class="text-xs md:text-sm text-slate-300 font-mono max-w-2xl mx-auto">
+                                ¡Bienvenido a la aventura gamificada de EF! Supera las sesiones en pista supervisadas por tu profesor, gana **Tokens**, completa tu Pokédex con los 151 Pokémon y gestiona tu equipo titular.
+                            </p>
+                        </div>
+
+                        <!-- Fair Play & Classroom Rules -->
+                        <div class="bg-slate-800/90 p-6 rounded-xl border-4 border-amber-500/60 space-y-4 font-mono text-xs">
+                            <div class="flex items-center gap-3 border-b border-slate-700 pb-3">
+                                <span class="text-2xl">📜</span>
+                                <div>
+                                    <h3 class="font-retro text-xs text-amber-300">Normas de Conducta & Reglas de Oro (Fair Play)</h3>
+                                    <p class="text-slate-300">Compromiso obligatorio para todos los entrenadores en el polideportivo:</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-slate-200">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-amber-400 font-bold">1.</span>
+                                    <p><b>Respeto absoluto:</b> Cuidado de los compañeros, profesores y material deportivo.</p>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-amber-400 font-bold">2.</span>
+                                    <p><b>Esfuerzo personal:</b> Supera tus propios retos sin comparar tus marcas con los demás.</p>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-amber-400 font-bold">3.</span>
+                                    <p><b>Juego Limpio:</b> La ayuda mutua y el trabajo en equipo puntúan siempre el doble.</p>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-amber-400 font-bold">4.</span>
+                                    <p><b>Validación Profesor:</b> Las sesiones en pista, medallas y tokens son verificadas exclusivamente por el maestro.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center pt-2">
+                            <button @click="playSound('victory'); showLanding = false" class="px-8 py-4 bg-amber-400 text-amber-950 text-xs rounded-xl hover:bg-amber-300 shadow-xl transition transform hover:scale-105 font-retro">
+                                🚀 ¡ENTENDIDO! ACCEDER A PERFILES ➔
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="!showLanding">
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center border-b-2 border-slate-700 pb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-amber-400 text-amber-950 border-4 border-amber-600 rounded-xl flex items-center justify-center text-2xl shadow">
+                                    ⚡
+                                </div>
+                                <div>
+                                    <h1 class="font-retro text-xs text-amber-300">ACCESO SEGURO DE ALUMNOS</h1>
+                                    <p class="text-[11px] text-slate-300 font-mono">Selecciona tu perfil o inicia sesión con contraseña</p>
+                                </div>
+                            </div>
+                            <button @click="playSound('click'); showLanding = true" class="bg-slate-800 text-slate-200 px-3 py-1.5 rounded text-xs font-mono border border-slate-600 hover:bg-slate-700">
+                                📖 Normas EF
+                            </button>
+                        </div>
+
+                        <template x-if="loadingProfiles">
+                            <div class="text-center py-8 font-retro text-xs text-amber-400 animate-pulse">
+                                Sincronizando con la nube...
+                            </div>
+                        </template>
+
+                        <template x-if="!loadingProfiles">
+                            <div class="space-y-6">
+                                <div class="flex border-b-2 border-slate-700 pb-2 gap-2 flex-wrap">
+                                    <button @click="playSound('click'); authTab = 'select'" :class="authTab === 'select' ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'" class="flex-1 py-2 rounded text-xs font-retro border border-slate-700 transition min-w-[110px]">
+                                        👥 Alumnos
+                                    </button>
+                                    <button @click="playSound('click'); authTab = 'register'" :class="authTab === 'register' ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'" class="flex-1 py-2 rounded text-xs font-retro border border-slate-700 transition min-w-[110px]">
+                                        ✨ Crear Alumno
+                                    </button>
+                                    <button @click="playSound('click'); authTab = 'teacher'" :class="authTab === 'teacher' ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-amber-900/60 text-amber-300'" class="flex-1 py-2 rounded text-xs font-retro border border-amber-600 transition min-w-[110px]">
+                                        👨‍🏫 Maestro EF
+                                    </button>
+                                </div>
+
+                                <template x-if="authTab === 'select'">
+                                    <div class="space-y-4">
+                                        <h3 class="font-retro text-xs text-slate-300">Selecciona tu perfil:</h3>
+                                        <div class="max-h-56 overflow-y-auto space-y-2 pr-1">
+                                            <template x-for="student in profilesList" :key="student.id">
+                                                <div @click="playSound('click'); openLoginModal(student)" class="bg-slate-800 border-2 border-slate-700 hover:border-amber-400 p-3 rounded-xl flex items-center justify-between cursor-pointer transition">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-12 h-12 bg-black/40 rounded-lg flex items-center justify-center border border-slate-600 overflow-hidden">
+                                                            <img :src="student.gender === 'boy' ? 'https://play.pokemonshowdown.com/sprites/trainers/red-gen3.png' : 'https://play.pokemonshowdown.com/sprites/trainers/leaf-gen3.png'" class="w-10 h-10 object-contain">
+                                                        </div>
+                                                        <div>
+                                                            <h4 class="font-retro text-xs text-amber-300" x-text="student.name"></h4>
+                                                            <p class="text-[10px] text-slate-300 font-mono" x-text="(student.school || 'Colegio') + ' • Medallas: ' + (student.badges ? student.badges.filter(b=>b).length : 0) + '/8'"></p>
+                                                        </div>
+                                                    </div>
+                                                    <button class="px-3 py-1.5 rounded text-[9px] bg-emerald-600 text-white font-retro">Entrar ➔</button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <template x-if="selectedStudentForLogin">
+                                    <div class="bg-slate-950 p-4 rounded-xl border-2 border-amber-400 space-y-3 font-mono text-xs">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-amber-300 font-retro text-[10px]" x-text="'Acceso para: ' + selectedStudentForLogin.name"></span>
+                                            <button @click="playSound('click'); selectedStudentForLogin = null" class="text-red-400 text-sm font-bold">✕</button>
+                                        </div>
+                                        <div>
+                                            <label class="block text-slate-300 mb-1">Contraseña:</label>
+                                            <input type="password" x-model="loginPasswordInput" placeholder="Introduce tu contraseña..." class="w-full p-2 rounded bg-black/60 border border-slate-700 text-slate-200">
+                                        </div>
+                                        <div class="flex gap-2 pt-1">
+                                            <button @click="verifyAndLogin()" class="flex-1 py-2 rounded text-[10px] bg-emerald-600 text-white font-retro">✓ Iniciar Sesión</button>
+                                            <button @click="playSound('click'); selectedStudentForLogin = null" class="bg-slate-800 text-slate-300 px-3 py-2 rounded border border-slate-700">Cancelar</button>
+                                        </div>
+                                        <p class="text-[10px] text-red-400 text-center" x-text="loginErrorMsg"></p>
+                                    </div>
+                                </template>
+
+                                <template x-if="authTab === 'register'">
+                                    <div class="space-y-4 font-mono text-xs">
+                                        <h3 class="font-retro text-xs text-amber-300">✨ Registrar Nuevo Alumno:</h3>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-slate-300 font-bold mb-1">Nombre:</label>
+                                                <input type="text" x-model="newStudent.name" placeholder="Tu nombre..." class="w-full p-2 rounded bg-black/60 border border-slate-700 text-slate-200">
+                                            </div>
+                                            <div>
+                                                <label class="block text-slate-300 font-bold mb-1">Colegio:</label>
+                                                <input type="text" x-model="newStudent.school" placeholder="Colegio Kanto" class="w-full p-2 rounded bg-black/60 border border-slate-700 text-slate-200">
+                                            </div>
+                                            <div>
+                                                <label class="block text-slate-300 font-bold mb-1">Contraseña:</label>
+                                                <input type="password" x-model="newStudent.password" placeholder="Contraseña..." class="w-full p-2 rounded bg-black/60 border border-slate-700 text-slate-200">
+                                            </div>
+                                            <div>
+                                                <label class="block text-slate-300 font-bold mb-1">PIN (4 números):</label>
+                                                <input type="text" maxlength="4" x-model="newStudent.pin" placeholder="1234" class="w-full p-2 rounded bg-black/60 border border-slate-700 text-slate-200 text-center tracking-widest">
+                                            </div>
+                                        </div>
+                                        <div class="flex gap-4 items-center justify-between pt-1">
+                                            <div class="flex gap-2">
+                                                <button @click="playSound('click'); newStudent.gender = 'boy'" :class="newStudent.gender === 'boy' ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-3 py-1.5 rounded border border-slate-700">👦 Chico</button>
+                                                <button @click="playSound('click'); newStudent.gender = 'girl'" :class="newStudent.gender === 'girl' ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-3 py-1.5 rounded border border-slate-700">👧 Chica</button>
+                                            </div>
+                                            <button @click="createNewStudent()" class="px-4 py-2 bg-emerald-600 text-white font-retro rounded text-[10px]">+ Registrar</button>
+                                        </div>
+                                        <p class="text-[10px] text-amber-300 text-center" x-text="createErrorMsg"></p>
+                                    </div>
+                                </template>
+
+                                <template x-if="authTab === 'teacher'">
+                                    <div class="space-y-4 font-mono text-xs">
+                                        <h3 class="font-retro text-xs text-amber-300">👨‍🏫 Acceso Profesor (Contraseña: profesor2026)</h3>
+                                        <div>
+                                            <label class="block text-slate-300 font-bold mb-1">Contraseña Maestro:</label>
+                                            <input type="password" x-model="teacherPasswordInput" placeholder="profesor2026" class="w-full p-2 rounded bg-black/60 border border-amber-500 text-slate-200">
+                                        </div>
+                                        <button @click="verifyTeacherLogin()" class="w-full py-2.5 rounded text-[10px] bg-amber-400 text-amber-950 font-retro font-bold">🔑 Entrar al Panel Maestro</button>
+                                        <p class="text-[10px] text-red-400 text-center" x-text="teacherErrorMsg"></p>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <header :class="getHeaderClass()" class="border-b-4 sticky top-0 z-40 shadow-lg transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+            
+            <template x-if="currentRole === 'student'">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-amber-400 border-4 border-slate-900 flex items-center justify-center shadow rounded-lg">
+                        <img :src="currentStudent.gender === 'boy' ? 'https://play.pokemonshowdown.com/sprites/trainers/red-gen3.png' : 'https://play.pokemonshowdown.com/sprites/trainers/leaf-gen3.png'" class="w-9 h-9 object-contain drop-shadow">
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="font-retro text-xs md:text-sm text-amber-300 tracking-wider" x-text="currentStudent.name"></h1>
+                            <button @click="playSound('click'); logout()" class="text-[9px] bg-red-900 text-red-200 px-2 py-0.5 rounded font-mono hover:bg-red-800">Salir</button>
+                        </div>
+                        <p class="text-xs opacity-90 font-mono" x-text="(currentStudent.school || 'Kanto')"></p>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="currentRole === 'teacher'">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-amber-400 border-4 border-amber-900 flex items-center justify-center shadow rounded-lg text-2xl">👨‍🏫</div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="font-retro text-xs md:text-sm text-amber-300">PANEL MAESTRO EF</h1>
+                            <button @click="playSound('click'); logout()" class="text-[9px] bg-red-900 text-red-200 px-2 py-0.5 rounded font-mono">Salir</button>
+                        </div>
+                        <p class="text-xs text-slate-300 font-mono">Validador Oficial de Sesiones, Medallas & Tokens</p>
+                    </div>
+                </div>
+            </template>
+            
+            <div class="flex items-center gap-4">
+                <template x-if="currentRole === 'student'">
+                    <div class="bg-amber-400 text-amber-950 px-3 py-1.5 rounded-lg border-2 border-amber-600 font-retro text-[10px] flex items-center gap-2 shadow">
+                        <i class="fa-solid fa-coins text-amber-700"></i>
+                        <span>Tokens: <strong x-text="currentStudent.tokens"></strong></span>
+                    </div>
+                </template>
+
+                <nav class="flex flex-wrap gap-2 font-retro text-[10px]">
+                    <template x-if="currentRole === 'student'">
+                        <div class="flex flex-wrap gap-2">
+                            <button @click="playSound('click'); tab = 'map'" :class="tab === 'map' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">🗺️ Mapa</button>
+                            <button @click="playSound('click'); tab = 'profile'" :class="tab === 'profile' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">🎨 Ficha</button>
+                            <button @click="playSound('click'); tab = 'badges'" :class="tab === 'badges' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">🏅 Medallas</button>
+                            <button @click="playSound('click'); tab = 'pokedex'" :class="tab === 'pokedex' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">📖 Pokédex</button>
+                            <button @click="playSound('click'); tab = 'team'" :class="tab === 'team' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">⭐ Equipo</button>
+                            <button @click="playSound('click'); tab = 'rewards'" :class="tab === 'rewards' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">🎁 Premios</button>
+                            <button @click="playSound('click'); tab = 'hof'" :class="tab === 'hof' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">🏆 Hall Fama</button>
+                        </div>
+                    </template>
+                    <template x-if="currentRole === 'teacher'">
+                        <button @click="playSound('click'); tab = 'teacher_dashboard'" class="px-3 py-2 rounded bg-amber-400 text-amber-950 font-bold">📋 Control Alumnos</button>
+                    </template>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full space-y-8">
+        
+        <div :class="getCardClass()" class="p-6 flex flex-col md:flex-row items-center gap-6 relative overflow-hidden border-4 rounded-xl shadow-xl">
+            <div class="absolute right-2 -bottom-4 opacity-10 text-9xl">⚡</div>
+            <div class="w-24 h-24 flex-shrink-0 bg-black/30 border-4 border-amber-400/50 rounded-2xl flex items-center justify-center p-2 animate-float">
+                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/479.png" class="w-20 h-20 object-contain drop-shadow">
+            </div>
+            <div class="flex-grow text-center md:text-left z-10">
+                <span class="bg-amber-400 text-amber-950 font-retro px-3 py-1 text-[10px] uppercase rounded font-bold">🤖 Rotom-Pizarra Cloud</span>
+                <h2 class="font-retro text-sm md:text-base text-amber-300 mt-3 mb-2" x-text="currentRole === 'teacher' ? '¡Panel de Control Maestro!' : ('¡Hola, ' + currentStudent.name + '!')"></h2>
+                <p class="text-xs md:text-sm leading-relaxed font-mono opacity-90" x-text="rotomMessage"></p>
+            </div>
+        </div>
+
+        <!-- TEACHER DASHBOARD -->
+        <template x-if="currentRole === 'teacher'">
+            <div class="space-y-6">
+                <div class="flex justify-between items-center flex-wrap gap-4">
+                    <div>
+                        <h3 class="font-retro text-base text-amber-300">👨‍🏫 Panel Maestro - Validación de Sesiones, Medallas & Tokens</h3>
+                        <p class="text-xs text-slate-300 opacity-80">Marca las sesiones superadas en pista. Cada sesión otorga +1 Token automáticamente, y al completar el 100% se otorga la Medalla.</p>
+                    </div>
+                    <button @click="playSound('click'); loadProfiles()" class="px-3 py-2 rounded bg-amber-400 text-amber-950 font-retro text-xs">🔄 Actualizar</button>
+                </div>
+
+                <div class="bg-slate-900 p-6 rounded-xl border-4 border-amber-500 shadow-2xl space-y-6">
+                    <template x-for="student in profilesList" :key="student.id">
+                        <div class="bg-slate-950 p-6 rounded-xl border-2 border-slate-700 space-y-4 font-mono text-xs">
+                            <div class="flex justify-between items-center flex-wrap gap-2 border-b border-slate-800 pb-3">
+                                <div>
+                                    <h5 class="font-retro text-xs text-amber-300" x-text="student.name"></h5>
+                                    <p class="text-[10px] text-slate-300" x-text="(student.school || 'Colegio') + ' • Tokens: ' + student.tokens + ' • Medallas: ' + (student.badges ? student.badges.filter(b=>b).length : 0) + '/8'"></p>
+                                </div>
+                                <button @click="playSound('click'); teacherSaveStudent(student)" class="px-3 py-1.5 rounded text-[9px] bg-emerald-600 text-white font-retro">💾 Guardar Cloud</button>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <template x-for="(gym, gIndex) in gyms" :key="gIndex">
+                                    <div class="bg-slate-900/70 p-3 rounded-lg border border-slate-700 space-y-2">
+                                        <div class="flex justify-between items-center">
+                                            <span class="font-retro text-[9px] text-amber-300 truncate" x-text="gym.shortName"></span>
+                                            <span class="px-2 py-0.5 rounded text-[9px] font-retro" :class="student.badges && student.badges[gIndex] ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" x-text="student.badges && student.badges[gIndex] ? '✓ Medalla' : 'Pendiente'"></span>
+                                        </div>
+                                        <button @click="playSound('click'); openGymModalForStudent(student, gIndex)" class="w-full py-1.5 bg-slate-800 text-amber-300 font-retro text-[9px] rounded border border-slate-700 hover:bg-slate-700">⚙️ Gestionar Sesiones</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- STUDENT VIEWS -->
+        <template x-if="currentRole === 'student'">
+            <div class="space-y-8">
+                
+                <!-- 1. MAP & SESSIONS TAB -->
+                <div x-show="tab === 'map'" class="space-y-6">
+                    <div class="flex justify-between items-center flex-wrap gap-4">
+                        <div>
+                            <h3 class="font-retro text-base text-amber-300">Mapa Táctico - Región Kanto (Sesiones Oficiales EF)</h3>
+                            <p class="text-xs opacity-80 font-mono">Haz clic en cualquier gimnasio para ver las sesiones y tu progreso verificado por el maestro.</p>
+                        </div>
+                    </div>
+
+                    <div :class="getCardClass()" class="p-6 rounded-xl border-4 shadow-2xl space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <template x-for="(gym, index) in gyms" :key="index">
+                                <div @click="playSound('click'); openGymModal(index)" :class="currentStudent.badges && currentStudent.badges[index] ? 'border-amber-400 bg-slate-900' : 'border-slate-700 opacity-90'" class="p-5 border-4 rounded-xl relative transition transform hover:scale-[1.02] cursor-pointer bg-slate-950">
+                                    <div class="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-retro" :class="currentStudent.badges && currentStudent.badges[index] ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" x-text="'GYM ' + (index + 1)"></div>
+                                    <div class="w-16 h-16 bg-slate-900 rounded-xl mb-3 mx-auto flex items-center justify-center border-2 border-slate-700 p-1">
+                                        <img :src="gym.badgeImg" class="w-12 h-12 object-contain drop-shadow">
+                                    </div>
+                                    <h4 class="font-retro text-xs text-amber-300 mb-1 text-center" x-text="gym.city"></h4>
+                                    <p class="text-[11px] font-semibold mb-2 text-center" :class="currentStudent.badges && currentStudent.badges[index] ? 'text-amber-200' : 'text-slate-400'" x-text="gym.badgeName"></p>
+                                    
+                                    <div class="bg-black/50 p-2.5 rounded border border-slate-800 text-xs font-mono space-y-1 mb-3">
+                                        <div class="flex justify-between text-[11px]">
+                                            <span class="text-slate-300">Sesiones:</span>
+                                            <span class="text-amber-400 font-bold" x-text="getGymCompletedCount(index) + ' / ' + gym.sessions.length"></span>
+                                        </div>
+                                        <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                                            <div class="bg-amber-400 h-full" :style="'width: ' + (getGymCompletedCount(index) / gym.sessions.length * 100) + '%'"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="w-full py-2 font-retro text-[10px] rounded border-2 text-center" :class="currentStudent.badges && currentStudent.badges[index] ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-900 text-slate-300 border-slate-700'" x-text="currentStudent.badges && currentStudent.badges[index] ? '✓ MEDALLA OBTENIDA' : '🔍 VER SESIONES'"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. PROFILE & COLOR CUSTOMIZATION TAB WITH ANTHROPOMETRY -->
+                <div x-show="tab === 'profile'" class="space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-slate-900 p-6 rounded-xl border-4 border-slate-700 space-y-4 text-slate-100">
+                            <div class="flex items-center gap-4 border-b-2 border-slate-700 pb-4">
+                                <div class="w-24 h-24 bg-black/40 border-4 border-slate-600 rounded-xl flex items-center justify-center p-1 relative shadow-inner">
+                                    <img :src="currentStudent.gender === 'boy' ? 'https://play.pokemonshowdown.com/sprites/trainers/red-gen3.png' : 'https://play.pokemonshowdown.com/sprites/trainers/leaf-gen3.png'" class="w-20 h-20 object-contain">
+                                </div>
+                                <div>
+                                    <span class="font-retro text-[10px] text-amber-300 bg-slate-800 px-2 py-1 rounded font-bold" x-text="'ID: ' + currentStudent.id"></span>
+                                    <h4 class="font-retro text-sm text-amber-300 mt-2">Nivel: 4º Primaria</h4>
+                                    <p class="text-xs text-slate-300 mt-1">Líder: <b x-text="currentStudent.name"></b></p>
+                                </div>
+                            </div>
+                            <div class="space-y-3 font-mono text-xs">
+                                <div>
+                                    <label class="block font-bold text-slate-300 mb-1">NOMBRE:</label>
+                                    <input type="text" x-model="currentStudent.name" @input.debounce="saveCurrentProfile()" class="w-full p-2 border-2 border-slate-700 rounded bg-black/50 text-slate-100 font-bold">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-300 mb-1">COLEGIO:</label>
+                                    <input type="text" x-model="currentStudent.school" @input.debounce="saveCurrentProfile()" class="w-full p-2 border-2 border-slate-700 rounded bg-black/50 text-slate-100">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 p-6 rounded-xl border-4 border-slate-700 space-y-4 text-slate-100 font-mono text-xs">
+                            <h4 class="font-retro text-xs text-amber-300 border-b border-slate-700 pb-2">🎨 Temas de Color GBA:</h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <button @click="playSound('click'); currentStudent.theme = 'emerald'; saveCurrentProfile();" :class="currentStudent.theme === 'emerald' ? 'bg-emerald-900 border-amber-400 font-bold' : 'bg-slate-800 border-slate-700'" class="p-3 rounded-xl border-2 text-center transition">🟢 Esmeralda</button>
+                                <button @click="playSound('click'); currentStudent.theme = 'red'; saveCurrentProfile();" :class="currentStudent.theme === 'red' ? 'bg-red-900 border-amber-400 font-bold' : 'bg-slate-800 border-slate-700'" class="p-3 rounded-xl border-2 text-center transition">🔴 Rojo Fuego</button>
+                                <button @click="playSound('click'); currentStudent.theme = 'pink'; saveCurrentProfile();" :class="currentStudent.theme === 'pink' ? 'bg-pink-900 border-amber-400 font-bold' : 'bg-slate-800 border-slate-700'" class="p-3 rounded-xl border-2 text-center transition">🌸 Rosa Sakura</button>
+                                <button @click="playSound('click'); currentStudent.theme = 'water'; saveCurrentProfile();" :class="currentStudent.theme === 'water' ? 'bg-blue-900 border-amber-400 font-bold' : 'bg-slate-800 border-slate-700'" class="p-3 rounded-xl border-2 text-center transition">💧 Azul Agua</button>
+                                <button @click="playSound('click'); currentStudent.theme = 'electric'; saveCurrentProfile();" :class="currentStudent.theme === 'electric' ? 'bg-yellow-900 border-amber-400 font-bold' : 'bg-slate-800 border-slate-700'" class="p-3 rounded-xl border-2 text-center transition">⚡ Eléctrico</button>
+                                <button @click="playSound('click'); currentStudent.theme = 'dark'; saveCurrentProfile();" :class="currentStudent.theme === 'dark' ? 'bg-zinc-900 border-amber-400 font-bold' : 'bg-slate-800 border-slate-700'" class="p-3 rounded-xl border-2 text-center transition">🌙 Noche GBA</button>
+                            </div>
+
+                            <h4 class="font-retro text-xs text-amber-300 border-b border-slate-700 pb-2 pt-4">📊 Antropometría:</h4>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block font-bold text-slate-300 mb-1">PESO (kg):</label>
+                                    <input type="number" x-model="currentStudent.weight" @input.debounce="saveCurrentProfile()" class="w-full p-2 rounded bg-black/50 border border-slate-700 text-slate-200">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-300 mb-1">ALTURA (cm):</label>
+                                    <input type="number" x-model="currentStudent.height" @input.debounce="saveCurrentProfile()" class="w-full p-2 rounded bg-black/50 border border-slate-700 text-slate-200">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-300 mb-1">ENVERGADURA (cm):</label>
+                                    <input type="number" x-model="currentStudent.wingspan" @input.debounce="saveCurrentProfile()" class="w-full p-2 rounded bg-black/50 border border-slate-700 text-slate-200">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-300 mb-1">PULSO REPOSO (bpm):</label>
+                                    <input type="number" x-model="currentStudent.hrRest" @input.debounce="saveCurrentProfile()" class="w-full p-2 rounded bg-black/50 border border-slate-700 text-slate-200">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. BADGES TAB -->
+                <div x-show="tab === 'badges'" class="space-y-6">
+                    <div :class="getCardClass()" class="p-8 rounded-xl border-4 shadow-2xl relative space-y-6">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-6 text-center">
+                            <template x-for="(badge, index) in (currentStudent.badges || [false,false,false,false,false,false,false,false])" :key="index">
+                                <div class="flex flex-col items-center space-y-2 p-3 rounded-xl bg-black/30 border-2" :class="badge ? 'border-amber-400' : 'border-slate-800 opacity-60'">
+                                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center p-2 shadow-lg" :class="badge ? 'bg-amber-400/20 border-4 border-amber-400 animate-badge' : 'bg-slate-800 border-4 border-slate-700 grayscale'">
+                                        <img :src="gyms[index].badgeImg" class="w-12 h-12 object-contain drop-shadow">
+                                    </div>
+                                    <span class="font-retro text-[9px] text-amber-300" x-text="gyms[index].shortName"></span>
+                                    <span class="text-[9px] font-bold" :class="badge ? 'text-emerald-400' : 'text-slate-500'" x-text="badge ? '✓ Conquistada' : 'Bloqueada'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. POKEDEX 151 TAB WITH TIERED TOKEN COSTS -->
+                <div x-show="tab === 'pokedex'" class="space-y-6">
+                    <div class="bg-slate-900 p-4 rounded-xl border-4 border-slate-700 flex flex-wrap gap-4 items-center justify-between font-mono text-xs">
+                        <input type="text" x-model="pokeSearch" placeholder="Buscar Pokémon por nombre, número o tipo..." class="w-full md:w-auto flex-grow bg-black/50 border border-slate-700 rounded p-2 text-slate-200">
+                        <div class="flex gap-2">
+                            <button @click="playSound('click'); pokeFilter = 'all'" :class="pokeFilter === 'all' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-3 py-1.5 rounded font-retro border border-slate-700">Todos (151)</button>
+                            <button @click="playSound('click'); pokeFilter = 'owned'" :class="pokeFilter === 'owned' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-3 py-1.5 rounded font-retro border border-slate-700">En Posesión</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[600px] overflow-y-auto pr-2">
+                        <template x-for="poke in filteredPokedex" :key="poke.id">
+                            <div class="bg-slate-950 p-5 border-4 rounded-xl flex flex-col justify-between space-y-4 relative" :class="isOwned(poke.name) ? 'border-amber-400' : 'border-slate-800'">
+                                <div class="absolute top-3 right-3 text-xs font-retro px-2 py-0.5 rounded" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" x-text="isOwned(poke.name) ? '✓ EN POSESIÓN' : (poke.cost + ' Token' + (poke.cost > 1 ? 's' : ''))"></div>
+                                
+                                <div class="flex items-center gap-4">
+                                    <div class="w-20 h-20 bg-black/50 border-2 border-slate-700 rounded-xl flex items-center justify-center p-2 flex-shrink-0">
+                                        <img :src="poke.sprite" class="w-16 h-16 object-contain drop-shadow" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png'">
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] font-retro text-amber-400" x-text="'Nº ' + poke.id + ' • ' + poke.type"></span>
+                                        <h4 class="font-retro text-sm text-slate-100 mt-1" x-text="poke.name"></h4>
+                                    </div>
+                                </div>
+
+                                <div class="bg-black/40 p-2.5 rounded border border-slate-800 text-[11px] font-mono space-y-1">
+                                    <p class="text-amber-300 font-bold">🏃‍♂️ Perfil Físico / EF:</p>
+                                    <p class="text-slate-300" x-text="poke.efDesc"></p>
+                                </div>
+
+                                <button @click="playSound('token'); recruitPokemon(poke)" class="w-full py-2.5 font-retro text-[10px] rounded border-2 shadow transition" :class="isOwned(poke.name) ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-amber-400 text-amber-950 border-amber-600 font-bold'" :disabled="isOwned(poke.name) || currentStudent.tokens < poke.cost" x-text="isOwned(poke.name) ? 'Reclutado' : ('Reclutar (' + poke.cost + ' Tokens)')"></button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 5. TEAM TAB (ADVANCED SLOT MANAGER) -->
+                <div x-show="tab === 'team'" class="space-y-6">
+                    <div :class="getCardClass()" class="p-6 rounded-xl border-4 space-y-4">
+                        <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+                            <h4 class="font-retro text-xs text-amber-300">⭐ TU EQUIPO TITULAR ACTUAL (Máx 6)</h4>
+                            <span class="text-[10px] text-slate-300 font-mono">Haz clic en "Cambiar" para asignar cualquier Pokémon reclutado a un hueco</span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 font-mono text-xs">
+                            <template x-for="(slot, idx) in (currentStudent.activeTeam || [null,null,null,null,null,null])" :key="idx">
+                                <div class="bg-slate-950 border-2 border-slate-700 p-4 rounded-xl text-center space-y-2 relative">
+                                    <span class="absolute top-2 left-2 text-[9px] font-retro text-slate-400" x-text="'#' + (idx+1)"></span>
+                                    <div class="w-20 h-20 mx-auto bg-slate-900 border border-slate-700 rounded-lg flex items-center justify-center p-1 mt-2">
+                                        <template x-if="slot"><img :src="getPokeSprite(slot)" class="w-16 h-16 object-contain"></template>
+                                        <template x-if="!slot"><span class="text-xs text-slate-500 font-mono">Vacío</span></template>
+                                    </div>
+                                    <p class="font-retro text-[10px] text-amber-300 truncate" x-text="slot || 'Libre'"></p>
+                                    <div class="flex gap-1">
+                                        <button @click="playSound('click'); openSwapModal(idx)" class="flex-1 py-1 bg-amber-500 text-amber-950 text-[9px] font-retro rounded font-bold" x-text="slot ? 'Cambiar' : '+ Añadir'"></button>
+                                        <template x-if="slot"><button @click="playSound('click'); removeFromTeam(idx)" class="py-1 px-2 bg-red-900 text-red-200 text-[9px] font-retro rounded">✕</button></template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Owned Collection List -->
+                    <div class="bg-slate-900 p-6 rounded-xl border-4 border-slate-700 space-y-4 font-mono text-xs">
+                        <h4 class="font-retro text-xs text-amber-300 border-b border-slate-700 pb-2">🎒 TUS POKÉMON RECLUTADOS EN POSESIÓN (<span x-text="currentStudent.ownedPokemon ? currentStudent.ownedPokemon.length : 1"></span>)</h4>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 max-h-64 overflow-y-auto pr-2">
+                            <template x-for="pokeName in (currentStudent.ownedPokemon || ['Pikachu'])" :key="pokeName">
+                                <div class="bg-slate-950 border-2 border-slate-700 p-3 rounded-xl text-center space-y-2">
+                                    <div class="w-16 h-16 mx-auto bg-slate-900 rounded-lg flex items-center justify-center p-1">
+                                        <img :src="getPokeSprite(pokeName)" class="w-14 h-14 object-contain">
+                                    </div>
+                                    <p class="font-retro text-[9px] text-amber-300 truncate" x-text="pokeName"></p>
+                                    <button @click="playSound('click'); addToFirstAvailableTeam(pokeName)" class="w-full py-1 bg-amber-400 text-amber-950 font-retro text-[9px] rounded font-bold hover:bg-amber-300" :disabled="currentStudent.activeTeam.includes(pokeName)" x-text="currentStudent.activeTeam.includes(pokeName) ? 'En Equipo' : 'Alinear'"></button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. REWARDS TAB -->
+                <div x-show="tab === 'rewards'" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <template x-for="reward in rewardsCatalog" :key="reward.id">
+                            <div :class="getCardClass()" class="p-5 border-4 rounded-xl flex flex-col justify-between space-y-4 relative shadow-xl font-mono text-xs">
+                                <div class="absolute top-3 right-3 bg-amber-400 text-amber-950 font-retro px-2.5 py-1 rounded text-[10px] font-bold shadow">
+                                    <i class="fa-solid fa-coins"></i> <span x-text="reward.cost + ' Token(s)'"></span>
+                                </div>
+                                <div class="space-y-2">
+                                    <div class="text-3xl mb-1" x-text="reward.icon"></div>
+                                    <h4 class="font-retro text-xs text-amber-300" x-text="reward.title"></h4>
+                                    <p class="text-xs leading-relaxed opacity-90" x-text="reward.desc"></p>
+                                </div>
+                                <button @click="playSound('token'); redeemReward(reward)" class="w-full py-2.5 font-retro text-[10px] rounded border-2 font-bold" :class="currentStudent.tokens >= reward.cost ? 'bg-amber-400 text-amber-950 border-amber-600' : 'bg-slate-800 text-slate-500 border-slate-700'" :disabled="currentStudent.tokens < reward.cost">🎁 Canjear Privilegio</button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 7. HALL OF FAME TAB -->
+                <div x-show="tab === 'hof'" class="space-y-6">
+                    <template x-if="earnedBadgesCount === 8">
+                        <div class="bg-amber-50 text-slate-900 p-8 md:p-12 rounded-2xl border-8 border-amber-600 shadow-2xl font-mono space-y-8 text-center">
+                            <h2 class="font-retro text-2xl text-amber-900">🏆 SALÓN DE LA FAMA - DIPLOMA MAESTRO KANTO</h2>
+                            <p class="text-sm">Se otorga el presente diploma de honor al Entrenador/a <b class="text-emerald-800 text-xl" x-text="currentStudent.name"></b> por conquistar los 8 gimnasios de Kanto.</p>
+                        </div>
+                    </template>
+                    <template x-if="earnedBadgesCount < 8">
+                        <div class="bg-slate-900 p-12 text-center space-y-6 border-4 border-amber-500/50 rounded-xl font-mono">
+                            <div class="text-6xl animate-bounce">🔒</div>
+                            <h4 class="font-retro text-lg text-amber-300">¡Hall de la Fama Cerrado!</h4>
+                            <p class="text-xs text-slate-300">Necesitas las 8 medallas de gimnasio para ingresar aquí.</p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+    </main>
+
+    <!-- GYM SESSIONS PROGRESS MODAL -->
+    <template x-if="selectedGymModal !== null">
+        <div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-slate-900 max-w-2xl w-full p-6 rounded-2xl border-4 border-amber-400 space-y-6 my-8 text-slate-100 font-mono text-xs">
+                <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                    <h3 class="font-retro text-xs text-amber-300" x-text="gyms[selectedGymModal].city + ' - Sesiones de Pista'"></h3>
+                    <button @click="playSound('click'); selectedGymModal = null" class="text-red-400 text-lg font-bold">✕</button>
+                </div>
+                <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <template x-for="(sessionTitle, sIdx) in gyms[selectedGymModal].sessions" :key="sIdx">
+                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" :checked="isSessionCompleted(activeStudentTarget, selectedGymModal, sIdx)" @change="playSound('click'); toggleGymSession(activeStudentTarget, selectedGymModal, sIdx)" :disabled="currentRole !== 'teacher'" class="w-4 h-4 accent-amber-400 cursor-pointer">
+                                <span class="text-slate-200" x-text="sessionTitle"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <button @click="playSound('click'); selectedGymModal = null" class="w-full py-2 bg-amber-400 text-amber-950 font-retro rounded">Cerrar</button>
+            </div>
+        </div>
+    </template>
+
+    <!-- TEAM SLOT SWAP MODAL -->
+    <template x-if="activeSwapSlot !== null">
+        <div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+            <div class="bg-slate-900 max-w-md w-full p-6 rounded-2xl border-4 border-amber-400 space-y-6 text-slate-100 font-mono text-xs">
+                <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                    <h3 class="font-retro text-xs text-amber-300" x-text="'Elegir Pokémon para el Hueco #' + (activeSwapSlot + 1)"></h3>
+                    <button @click="activeSwapSlot = null" class="text-red-400 text-lg font-bold">✕</button>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-1">
+                    <template x-for="pokeName in (currentStudent.ownedPokemon || ['Pikachu'])" :key="pokeName">
+                        <div @click="playSound('click'); assignToSlot(activeSwapSlot, pokeName)" class="bg-slate-950 p-3 rounded-xl border-2 border-slate-700 hover:border-amber-400 text-center cursor-pointer transition space-y-1">
+                            <img :src="getPokeSprite(pokeName)" class="w-12 h-12 object-contain mx-auto">
+                            <p class="font-retro text-[9px] text-amber-300 truncate" x-text="pokeName"></p>
+                        </div>
+                    </template>
+                </div>
+                <button @click="playSound('click'); assignToSlot(activeSwapSlot, null)" class="w-full py-2 bg-red-900 text-red-200 font-retro rounded">Vaciar Hueco</button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        window.FB = { initializeApp, getAuth, signInAnonymously, getFirestore, collection, getDocs, doc, setDoc };
+    </script>
+
+    <script>
+        function appState() {
+            return {
+                tab: 'map',
+                authTab: 'select',
+                showLanding: true,
+                rotomMessage: '"¡Bzzzt! Completa las sesiones en pista supervisadas por tu profesor, gana tokens y recluta a los 151 Pokémon de Kanto."',
+                
+                currentRole: null,
+                db: null,
+                auth: null,
+                user: null,
+                appId: typeof __app_id !== 'undefined' ? __app_id : 'default-app-id',
+                loadingProfiles: true,
+                profilesList: [],
+                
+                selectedStudentForLogin: null,
+                loginPasswordInput: '',
+                loginErrorMsg: '',
+                createErrorMsg: '',
+                teacherPasswordInput: '',
+                teacherErrorMsg: '',
+                
+                selectedGymModal: null,
+                activeStudentTarget: null,
+                activeSwapSlot: null,
+
+                newStudent: { name: '', school: 'Colegio Kanto', gender: 'boy', password: '', pin: '1234' },
+                currentStudentId: null,
+                currentStudent: {
+                    id: '', name: '', school: 'Colegio Kanto', gender: 'boy', password: '', pin: '1234',
+                    tokens: 0, weight: '', height: '', wingspan: '', hrRest: '', theme: 'emerald',
+                    gymSessionsData: [], badges: [false, false, false, false, false, false, false, false],
+                    ownedPokemon: ['Pikachu'], activeTeam: ['Pikachu', null, null, null, null, null], redeemedRewards: []
+                },
+
+                pokeSearch: '',
+                pokeFilter: 'all',
+
+                rewardsCatalog: [
+                    { id: 'r1', title: 'Encargado de Material', cost: 1, icon: '🎒', desc: 'Repartir y recoger material.' },
+                    { id: 'r2', title: 'Líder de la Fila', cost: 1, icon: '🚶‍♂️️', desc: 'Ir el primero en los desplazamientos.' },
+                    { id: 'r3', title: 'DJ del Calentamiento', cost: 2, icon: '🎵', desc: 'Elegir música para el calentamiento.' },
+                    { id: 'r4', title: 'Árbitro Asistente', cost: 2, icon: '🚩', desc: 'Arbitrar los torneos de EF.' },
+                    { id: 'r5', title: 'Capitán de Equipo', cost: 3, icon: '⭐', desc: 'Liderar grupos en los torneos.' },
+                    { id: 'r6', title: 'Elegir Juego del Viernes', cost: 3, icon: '🎮', desc: 'Proponer el juego cooperativo final.' }
+                ],
+
+                gyms: [
+                    { city: 'Ciudad Plateada', shortName: 'MEDALLA ROCA', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png', badgeName: 'Medalla Roca 🪨', sessions: ['1. Presentación.', '2. Antropometría.', '3. Dinámicas.', '4. Calentamiento 1.', '5. Calentamiento 2.', '6. Cooperativos 1.', '7. Cooperativos 2.', '8. Cooperativos 3.', '9. SA'] },
+                    { city: 'Ciudad Celeste', shortName: 'MEDALLA CASCADA', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png', badgeName: 'Medalla Cascada 💧', sessions: ['1. Higiene.', '2. Lateralidad.', '3. Corporal.', '4. Espacio.', '5. Equilibrio estático.', '6. Dinámico.', '7. Ruedas 1.', '8. Ruedas 2.', '9. Ruedas 3.', '10. SA 1.', '11. SA 2.', '12. Evaluación.'] },
+                    { city: 'Ciudad Vermilion', shortName: 'MEDALLA RAYO', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png', badgeName: 'Medalla Rayo ⚡', sessions: ['1. Intro.', '2. Cuadrupedia.', '3. Reptación.', '4. Trepa.', '5. Saltos.', '6. Comba.', '7. Volteretas 1.', '8. Volteretas 2.', '9. Lanzamientos 1.', '10. Lanzamientos 2.', '11. Golpeos.', '12. Blocajes.', '13. SA 1.', '14. SA 2.', '15. SA 3.', '16. Eval.'] },
+                    { city: 'Ciudad Fucsia', shortName: 'MEDALLA ARCOÍRIS', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png', badgeName: 'Medalla Arcoíris 🌈', sessions: ['1. Intro.', '2. Fuerza 1.', '3. Fuerza 2.', '4. Velocidad 1.', '5. Velocidad 2.', '6. Resistencia 1.', '7. Resistencia 2.', '8. Flexibilidad.', '9. SA 1.', '10. SA 2.', '11. SA 3.', '12. Circuito.'] },
+                    { city: 'Ciudad Azafrán', shortName: 'MEDALLA PANTANO', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/luxury-ball.png', badgeName: 'Medalla Pantano 🔮', sessions: ['1. Intro.', '2. Expresivos.', '3. Impro 1.', '4. Impro 2.', '5. Rítmicos.', '6. Teatrillo.', '7. Drama.', '8. Concurso.', '9. SA 1.', '10. SA 2.', '11. SA 3.', '12. Eval.'] },
+                    { city: 'Pueblo Lavanda', shortName: 'MEDALLA ALMA', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/premier-ball.png', badgeName: 'Medalla Alma 🧠', sessions: ['1. Material.', '2. Bádminton 1.', '3. Bádminton 2.', '4. Torneo Bádminton.', '5. Suaviball 1.', '6. Suaviball 2.', '7. Torneo Suaviball.', '8. SA 1.', '9. SA 2.', '10. SA 3.', '11. Eval Bádminton.', '12. Eval Suaviball.'] },
+                    { city: 'Isla Canela', shortName: 'MEDALLA VOLCÁN', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/dive-ball.png', badgeName: 'Medalla Volcán 🦾', sessions: ['1. Intro.', '2. Datchball 1.', '3. Datchball 2.', '4. Bijbol 1.', '5. Bijbol 2.', '6. SA 1.', '7. SA 2.', '8. SA 3.', '9. Juegos 1.', '10. Juegos 2.', '11. Torneos.', '12. Eval.'] },
+                    { city: 'Ciudad Verde', shortName: 'MEDALLA TIERRA', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/timer-ball.png', badgeName: 'Medalla Tierra 🤝', sessions: ['1. Intro.', '2. Mapas 1.', '3. Mapas 2.', '4. Orientación 1.', '5. Orientación 2.', '6. Orientación 3.', '7. Escalada 1.', '8. Escalada 2.', '9. SA 1.', '10. SA 2.', '11. Antropometría.', '12. Salida natural.'] }
+                ],
+
+                // Full 151 Kanto Pokédex with Tiered Token Costs (1 to 6 tokens)
+                pokedexList: [
+                    { id: '001', name: 'Bulbasaur', type: 'Planta', cost: 2, efDesc: 'Estabilidad postural y control de centro de gravedad en circuitos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png' },
+                    { id: '002', name: 'Ivysaur', type: 'Planta', cost: 3, efDesc: 'Equilibrio estático prolongado sobre superficies inestables.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/2.png' },
+                    { id: '003', name: 'Venusaur', type: 'Planta', cost: 4, efDesc: 'Control postural excelente y estabilidad en dinámicas grupales.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/3.png' },
+                    { id: '004', name: 'Charmander', type: 'Fuego', cost: 2, efDesc: 'Explosividad inicial en salidas de velocidad y carreras cortas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/4.png' },
+                    { id: '005', name: 'Charmeleon', type: 'Fuego', cost: 3, efDesc: 'Aumento progresivo de resistencia aeróbica y ritmo cardíaco.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/5.png' },
+                    { id: '006', name: 'Charizard', type: 'Fuego', cost: 4, efDesc: 'Resistencia aeróbica superior y carreras de fondo prolongadas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png' },
+                    { id: '007', name: 'Squirtle', type: 'Agua', cost: 2, efDesc: 'Agilidad y propulsión eficiente en medio acuático.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/7.png' },
+                    { id: '008', name: 'Wartortle', type: 'Agua', cost: 3, efDesc: 'Coordinación visomotora y control de impulsos acuáticos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/8.png' },
+                    { id: '009', name: 'Blastoise', type: 'Agua', cost: 4, efDesc: 'Fuerza en tren superior y empuje eficiente en natación.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/9.png' },
+                    { id: '010', name: 'Caterpie', type: 'Bicho', cost: 1, efDesc: 'Flexibilidad de columna y desplazamientos reptantes.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10.png' },
+                    { id: '011', name: 'Metapod', type: 'Bicho', cost: 1, efDesc: 'Control de tensión isométrica y resistencia estática.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/11.png' },
+                    { id: '012', name: 'Butterfree', type: 'Bicho', cost: 2, efDesc: 'Agilidad aérea, saltos suspendidos y suavidad en recepciones.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/12.png' },
+                    { id: '013', name: 'Weedle', type: 'Bicho', cost: 1, efDesc: 'Reflejos rápidos y cambios de dirección en espacios reducidos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/13.png' },
+                    { id: '014', name: 'Kakuna', type: 'Bicho', cost: 1, efDesc: 'Estabilidad corporal absoluta ante estímulos externos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/14.png' },
+                    { id: '015', name: 'Beedrill', type: 'Bicho', cost: 3, efDesc: 'Velocidad de reacción y precisión en golpeos rápidos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/15.png' },
+                    { id: '016', name: 'Pidgey', type: 'Normal', cost: 1, efDesc: 'Coordinación en saltos verticales y recepción de balones.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/16.png' },
+                    { id: '017', name: 'Pidgeotto', type: 'Normal', cost: 2, efDesc: 'Amplitud de zancada en carreras de velocidad media.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/17.png' },
+                    { id: '018', name: 'Pidgeot', type: 'Normal', cost: 3, efDesc: 'Resistencia aeróbica y velocidad punta en pista libre.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/18.png' },
+                    { id: '019', name: 'Rattata', type: 'Normal', cost: 1, efDesc: 'Agilidad en esquivas y velocidad en distancias cortas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/19.png' },
+                    { id: '020', name: 'Raticate', type: 'Normal', cost: 2, efDesc: 'Potencia explosiva en arranques y frenadas bruscas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/20.png' },
+                    { id: '021', name: 'Spearow', type: 'Normal', cost: 1, efDesc: 'Reflejos visuales y anticipación en juegos de persecución.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/21.png' },
+                    { id: '022', name: 'Fearow', type: 'Normal', cost: 3, efDesc: 'Resistencia en carreras continuas y zancada amplia.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/22.png' },
+                    { id: '023', name: 'Ekans', type: 'Veneno', cost: 1, efDesc: 'Flexibilidad corporal extrema y ondulaciones gimnásticas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/23.png' },
+                    { id: '024', name: 'Arbok', type: 'Veneno', cost: 3, efDesc: 'Fuerza de presión y control de suelo en colchonetas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/24.png' },
+                    { id: '025', name: 'Pikachu', type: 'Eléctrico', cost: 2, efDesc: 'Velocidad de reacción explosiva y agilidad en cambios de dirección.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png' },
+                    { id: '026', name: 'Raichu', type: 'Eléctrico', cost: 3, efDesc: 'Salto vertical impulsado y velocidad explosiva en pista.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/26.png' },
+                    { id: '027', name: 'Sandshrew', type: 'Tierra', cost: 2, efDesc: 'Capacidad de absorción de impactos y rodamientos seguros.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/27.png' },
+                    { id: '028', name: 'Sandslash', type: 'Tierra', cost: 3, efDesc: 'Agilidad en giros rápidos y protección articular.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/28.png' },
+                    { id: '029', name: 'Nidoran♀', type: 'Veneno', cost: 2, efDesc: 'Cooperación en parejas y coordinación táctica grupal.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/29.png' },
+                    { id: '030', name: 'Nidorina', type: 'Veneno', cost: 3, efDesc: 'Sincronización en desplazamientos conjuntos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/30.png' },
+                    { id: '031', name: 'Nidoqueen', type: 'Veneno', cost: 4, efDesc: 'Fuerza y estabilidad defensiva en juegos de equipo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/31.png' },
+                    { id: '032', name: 'Nidoran♂', type: 'Veneno', cost: 2, efDesc: 'Velocidad y respuesta rápida a estímulos auditivos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/32.png' },
+                    { id: '033', name: 'Nidorino', type: 'Veneno', cost: 3, efDesc: 'Progresión en carreras de velocidad y fuerza de salto.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/33.png' },
+                    { id: '034', name: 'Nidoking', type: 'Veneno', cost: 4, efDesc: 'Potencia muscular global y liderazgo en deportes de equipo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/34.png' },
+                    { id: '035', name: 'Clefairy', type: 'Hada', cost: 2, efDesc: 'Coordinación rítmica y expresión corporal alegre.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/35.png' },
+                    { id: '036', name: 'Clefable', type: 'Hada', cost: 3, efDesc: 'Fluidez en coreografías y juegos cooperativos musicales.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/36.png' },
+                    { id: '037', name: 'Vulpix', type: 'Fuego', cost: 2, efDesc: 'Agilidad en trazados de zigzag y giros cerrados.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/37.png' },
+                    { id: '038', name: 'Ninetales', type: 'Fuego', cost: 4, efDesc: 'Resistencia aeróbica prolongada y elegancia motriz.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/38.png' },
+                    { id: '039', name: 'Jigglypuff', type: 'Normal', cost: 2, efDesc: 'Control de la respiración diafragmática y relajación.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/39.png' },
+                    { id: '040', name: 'Wigglytuff', type: 'Normal', cost: 3, efDesc: 'Elasticidad y estiramientos post-esfuerzo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/40.png' },
+                    { id: '041', name: 'Zubat', type: 'Veneno', cost: 1, efDesc: 'Orientación espacial y reflejos en espacios con poca luz.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/41.png' },
+                    { id: '042', name: 'Golbat', type: 'Veneno', cost: 3, efDesc: 'Agilidad en suspensiones y saltos con giro.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/42.png' },
+                    { id: '043', name: 'Oddish', type: 'Planta', cost: 1, efDesc: 'Estabilidad de base y arraigo en suelo firme.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/43.png' },
+                    { id: '044', name: 'Gloom', type: 'Planta', cost: 2, efDesc: 'Resistencia a esfuerzos sostenidos en estática.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/44.png' },
+                    { id: '045', name: 'Vileplume', type: 'Planta', cost: 4, efDesc: 'Equilibrio postural y control de cargas corporales.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/45.png' },
+                    { id: '046', name: 'Paras', type: 'Bicho', cost: 1, efDesc: 'Fuerza de agarre y sujeción en trepa o barras.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/46.png' },
+                    { id: '047', name: 'Parasect', type: 'Bicho', cost: 3, efDesc: 'Resistencia muscular en extremidades superiores.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/47.png' },
+                    { id: '048', name: 'Venonat', type: 'Bicho', cost: 1, efDesc: 'Agudeza visual y coordinación óculo-manual.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/48.png' },
+                    { id: '049', name: 'Venomoth', type: 'Bicho', cost: 3, efDesc: 'Vuelos rasantes y agilidad en desplazamientos aéreos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/49.png' },
+                    { id: '050', name: 'Diglett', type: 'Tierra', cost: 1, efDesc: 'Velocidad de reacción rápida desde posición agachada.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/50.png' },
+                    { id: '051', name: 'Dugtrio', type: 'Tierra', cost: 3, efDesc: 'Sincronización triple en salidas de velocidad coordinada.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/51.png' },
+                    { id: '052', name: 'Meowth', type: 'Normal', cost: 2, efDesc: 'Flexibilidad felina y caída amortiguada en saltos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/52.png' },
+                    { id: '053', name: 'Persian', type: 'Normal', cost: 3, efDesc: 'Velocidad punta y agilidad superior en giros.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/53.png' },
+                    { id: '054', name: 'Psyduck', type: 'Agua', cost: 2, efDesc: 'Concentración mental en situaciones de equilibrio acuático.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/54.png' },
+                    { id: '055', name: 'Golduck', type: 'Agua', cost: 3, efDesc: 'Fluidez y velocidad en estilos de natación y desplazamientos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/55.png' },
+                    { id: '056', name: 'Mankey', type: 'Lucha', cost: 2, efDesc: 'Agilidad en trepa de cuerda y fuerza explosiva.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/56.png' },
+                    { id: '057', name: 'Primeape', type: 'Lucha', cost: 3, efDesc: 'Intensidad aeróbica y fuerza en juegos de oposición.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/57.png' },
+                    { id: '058', name: 'Growlithe', type: 'Fuego', cost: 2, efDesc: 'Constancia en carreras de fondo y lealtad en equipo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/58.png' },
+                    { id: '059', name: 'Arcanine', type: 'Fuego', cost: 4, efDesc: 'Capacidad cardiorrespiratoria superior y constancia en circuitos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/59.png' },
+                    { id: '060', name: 'Poliwag', type: 'Agua', cost: 1, efDesc: 'Coordinación rítmica de patadas en medio acuático.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/60.png' },
+                    { id: '061', name: 'Poliwhirl', type: 'Agua', cost: 2, efDesc: 'Resistencia aeróbica en natación continua.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/61.png' },
+                    { id: '062', name: 'Poliwrath', type: 'Agua', cost: 4, efDesc: 'Fuerza combinada en deportes de lucha y empuje acuático.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/62.png' },
+                    { id: '063', name: 'Abra', type: 'Psíquico', cost: 2, efDesc: 'Concentración mental profunda y relajación muscular.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/63.png' },
+                    { id: '064', name: 'Kadabra', type: 'Psíquico', cost: 3, efDesc: 'Precisión en lanzamientos y coordinación visomotora.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/64.png' },
+                    { id: '065', name: 'Alakazam', type: 'Psíquico', cost: 4, efDesc: 'Concentración superior, precisión y estrategia deportiva.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/65.png' },
+                    { id: '066', name: 'Machop', type: 'Lucha', cost: 2, efDesc: 'Fuerza base en extremidades y transporte de cargas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/66.png' },
+                    { id: '067', name: 'Machoke', type: 'Lucha', cost: 3, efDesc: 'Potencia muscular en tren superior y fuerza de agarre.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/67.png' },
+                    { id: '068', name: 'Machamp', type: 'Lucha', cost: 4, efDesc: 'Fuerza máxima muscular y manejo seguro de cargas pesadas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/68.png' },
+                    { id: '069', name: 'Bellsprout', type: 'Planta', cost: 1, efDesc: 'Flexibilidad de tronco y elasticidad en estiramientos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/69.png' },
+                    { id: '070', name: 'Weepinbell', type: 'Planta', cost: 2, efDesc: 'Control postural en posiciones invertidas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/70.png' },
+                    { id: '071', name: 'Victreebel', type: 'Planta', cost: 3, efDesc: 'Fuerza en la cintura escapular y estabilidad.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/71.png' },
+                    { id: '072', name: 'Tentacool', type: 'Agua', cost: 1, efDesc: 'Ondulación corporal y fluidez en desplazamientos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/72.png' },
+                    { id: '073', name: 'Tentacruel', type: 'Agua', cost: 3, efDesc: 'Coordinación motriz compleja y resistencia acuática.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/73.png' },
+                    { id: '074', name: 'Geodude', type: 'Roca', cost: 1, efDesc: 'Fuerza isométrica y resistencia en posición firme.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/74.png' },
+                    { id: '075', name: 'Graveler', type: 'Roca', cost: 2, efDesc: 'Potencia de piernas en saltos verticales.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/75.png' },
+                    { id: '076', name: 'Golem', type: 'Roca', cost: 4, efDesc: 'Resistencia a cargas y solidez en deportes de contacto.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/76.png' },
+                    { id: '077', name: 'Ponyta', type: 'Fuego', cost: 2, efDesc: 'Velocidad de carrera continua y zancada rítmica.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/77.png' },
+                    { id: '078', name: 'Rapidash', type: 'Fuego', cost: 3, efDesc: 'Velocidad punta y resistencia aeróbica en medio fondo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/78.png' },
+                    { id: '079', name: 'Slowpoke', type: 'Agua', cost: 1, efDesc: 'Control de la relajación muscular y pausa activa.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/79.png' },
+                    { id: '080', name: 'Slowbro', type: 'Agua', cost: 3, efDesc: 'Equilibrio estático y estabilidad bajo presión.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/80.png' },
+                    { id: '081', name: 'Magnemite', type: 'Eléctrico', cost: 1, efDesc: 'Desplazamientos rectilíneos precisos y velocidad constante.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/81.png' },
+                    { id: '082', name: 'Magneton', type: 'Eléctrico', cost: 3, efDesc: 'Sincronización grupal en formaciones geométricas en pista.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/82.png' },
+                    { id: '083', name: 'Farfetch\'d', type: 'Normal', cost: 2, efDesc: 'Habilidad y manejo de implementos y bates.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/83.png' },
+                    { id: '084', name: 'Doduo', type: 'Normal', cost: 1, efDesc: 'Frecuencia de zancada rápida y coordinación de piernas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/84.png' },
+                    { id: '085', name: 'Dodrio', type: 'Normal', cost: 3, efDesc: 'Resistencia en carreras de relevos y velocidad explosiva.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/85.png' },
+                    { id: '086', name: 'Seel', type: 'Agua', cost: 1, efDesc: 'Flexibilidad acuática y deslizamiento eficiente.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/86.png' },
+                    { id: '087', name: 'Dewgong', type: 'Agua', cost: 3, efDesc: 'Resistencia térmica y control de la respiración en esfuerzo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/87.png' },
+                    { id: '088', name: 'Grimer', type: 'Veneno', cost: 1, efDesc: 'Adaptabilidad motriz en superficies blandas y colchonetas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/88.png' },
+                    { id: '089', name: 'Muk', type: 'Veneno', cost: 3, efDesc: 'Absorción de impactos y control corporal en suelo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/89.png' },
+                    { id: '090', name: 'Shellder', type: 'Agua', cost: 1, efDesc: 'Protección articular y contracción muscular rápida.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/90.png' },
+                    { id: '091', name: 'Cloyster', type: 'Agua', cost: 3, efDesc: 'Solidez defensiva y rigidez estática de control.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/91.png' },
+                    { id: '092', name: 'Gastly', type: 'Fantasma', cost: 1, efDesc: 'Agilidad esquiva y desplazamientos sigilosos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/92.png' },
+                    { id: '093', name: 'Haunter', type: 'Fantasma', cost: 2, efDesc: 'Reflejos rápidos y capacidad de reacción sorpresa.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/93.png' },
+                    { id: '094', name: 'Gengar', type: 'Fantasma', cost: 4, efDesc: 'Expresión corporal fluida, agilidad esquiva y dramatización.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png' },
+                    { id: '095', name: 'Onix', type: 'Roca', cost: 3, efDesc: 'Control postural en estaturas elevadas y estabilidad.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/95.png' },
+                    { id: '096', name: 'Drowzee', type: 'Psíquico', cost: 1, efDesc: 'Concentración mental y control de la atención.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/96.png' },
+                    { id: '097', name: 'Hypno', type: 'Psíquico', cost: 3, efDesc: 'Enfoque visual y precisión en juegos de lanzamiento.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/97.png' },
+                    { id: '098', name: 'Krabby', type: 'Agua', cost: 1, efDesc: 'Fuerza de pinza y agilidad en desplazamientos laterales.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/98.png' },
+                    { id: '099', name: 'Kingler', type: 'Agua', cost: 3, efDesc: 'Potencia en extremidades superiores y agarre firme.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/99.png' },
+                    { id: '100', name: 'Voltorb', type: 'Eléctrico', cost: 1, efDesc: 'Velocidad de reacción explosiva ante señales acústicas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/100.png' },
+                    { id: '101', name: 'Electrode', type: 'Eléctrico', cost: 2, efDesc: 'Velocidad máxima en sprints cortos de 20 metros.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/101.png' },
+                    { id: '102', name: 'Exeggcute', type: 'Planta', cost: 1, efDesc: 'Trabajo en equipo y coordinación grupal múltiple.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/102.png' },
+                    { id: '103', name: 'Exeggutor', type: 'Planta', cost: 3, efDesc: 'Estabilidad de altura y visión periférica global.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/103.png' },
+                    { id: '104', name: 'Cubone', type: 'Tierra', cost: 2, efDesc: 'Manejo de implementos y coordinación óculo-manual.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/104.png' },
+                    { id: '105', name: 'Marowak', type: 'Tierra', cost: 3, efDesc: 'Precisión y potencia en golpeos y lanzamientos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/105.png' },
+                    { id: '106', name: 'Hitmonlee', type: 'Lucha', cost: 3, efDesc: 'Amplitud de zancada, flexibilidad y patadas controladas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/106.png' },
+                    { id: '107', name: 'Hitmonchan', type: 'Lucha', cost: 3, efDesc: 'Rapidez de extremidades superiores y coordinación de puños.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/107.png' },
+                    { id: '108', name: 'Lickitung', type: 'Normal', cost: 2, efDesc: 'Flexibilidad y control corporal global.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/108.png' },
+                    { id: '109', name: 'Koffing', type: 'Veneno', cost: 1, efDesc: 'Suspensión y control de la respiración aeróbica.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/109.png' },
+                    { id: '110', name: 'Weezing', type: 'Veneno', cost: 3, efDesc: 'Resistencia pulmonar en esfuerzos prolongados.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/110.png' },
+                    { id: '111', name: 'Rhyhorn', type: 'Tierra', cost: 2, efDesc: 'Inercia en carrera recta y fuerza de impacto.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/111.png' },
+                    { id: '112', name: 'Rhydon', type: 'Tierra', cost: 4, efDesc: 'Potencia muscular y estabilidad en cargas pesadas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/112.png' },
+                    { id: '113', name: 'Chansey', type: 'Normal', cost: 3, efDesc: 'Resistencia aeróbica y cooperación asistida.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/113.png' },
+                    { id: '114', name: 'Tangela', type: 'Planta', cost: 2, efDesc: 'Flexibilidad articular y agilidad en enredos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/114.png' },
+                    { id: '115', name: 'Kangaskhan', type: 'Normal', cost: 4, efDesc: 'Protección mutua y fuerza en juegos cooperativos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/115.png' },
+                    { id: '116', name: 'Horsea', type: 'Agua', cost: 1, efDesc: 'Hidrodinámica y control de la respiración.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/116.png' },
+                    { id: '117', name: 'Seadra', type: 'Agua', cost: 2, efDesc: 'Agilidad acuática y propulsión rítmica.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/117.png' },
+                    { id: '118', name: 'Goldeen', type: 'Agua', cost: 1, efDesc: 'Velocidad en natación y giros limpios.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/118.png' },
+                    { id: '119', name: 'Seaking', type: 'Agua', cost: 3, efDesc: 'Resistencia en medio acuático y constancia.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/119.png' },
+                    { id: '120', name: 'Staryu', type: 'Agua', cost: 2, efDesc: 'Simetría corporal y giros gimnásticos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/120.png' },
+                    { id: '121', name: 'Starmie', type: 'Agua', cost: 3, efDesc: 'Velocidad y precisión en rotaciones corporales.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/121.png' },
+                    { id: '122', name: 'Mr. Mime', type: 'Psíquico', cost: 3, efDesc: 'Mime, expresión corporal y control espacial.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/122.png' },
+                    { id: '123', name: 'Scyther', type: 'Bicho', cost: 3, efDesc: 'Velocidad de ejecución y precisión gestual.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/123.png' },
+                    { id: '124', name: 'Jynx', type: 'Hielo', cost: 3, efDesc: 'Ritmo, coordinación y danza expresiva.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/124.png' },
+                    { id: '125', name: 'Electabuzz', type: 'Eléctrico', cost: 3, efDesc: 'Potencia explosiva y reflejos eléctricos en pista.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/125.png' },
+                    { id: '126', name: 'Magmar', type: 'Fuego', cost: 3, efDesc: 'Resistencia al calor e intensidad cardiovascular.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/126.png' },
+                    { id: '127', name: 'Pinsir', type: 'Bicho', cost: 3, efDesc: 'Fuerza de prensión y tracción en deportes de fuerza.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/127.png' },
+                    { id: '128', name: 'Tauros', type: 'Normal', cost: 3, efDesc: 'Potencia de carrera en línea recta y cambios de ritmo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/128.png' },
+                    { id: '129', name: 'Magikarp', type: 'Agua', cost: 1, efDesc: 'Constancia, perseverancia y superación de retos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/129.png' },
+                    { id: '130', name: 'Gyarados', type: 'Agua', cost: 4, efDesc: 'Potencia acuática máxima y resistencia superior.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/130.png' },
+                    { id: '131', name: 'Lapras', type: 'Agua', cost: 4, efDesc: 'Equilibrio acuático, relajación y cooperación grupal.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/131.png' },
+                    { id: '132', name: 'Ditto', type: 'Normal', cost: 3, efDesc: 'Adaptabilidad motriz a cualquier rol de juego.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/132.png' },
+                    { id: '133', name: 'Eevee', type: 'Normal', cost: 2, efDesc: 'Polivalencia motriz y versatilidad en habilidades.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png' },
+                    { id: '134', name: 'Vaporeon', type: 'Agua', cost: 4, efDesc: 'Resistencia acuática y fluidez de movimientos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/134.png' },
+                    { id: '135', name: 'Jolteon', type: 'Eléctrico', cost: 4, efDesc: 'Velocidad explosiva y reflejos fulgurantes.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/135.png' },
+                    { id: '136', name: 'Flareon', type: 'Fuego', cost: 4, efDesc: 'Potencia aeróbica y resistencia al esfuerzo.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/136.png' },
+                    { id: '137', name: 'Porygon', type: 'Normal', cost: 3, efDesc: 'Precisión geométrica en trayectorias motrices.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/137.png' },
+                    { id: '138', name: 'Omanyte', type: 'Roca', cost: 2, efDesc: 'Control espiral y estabilidad rotacional.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/138.png' },
+                    { id: '139', name: 'Omastar', type: 'Roca', cost: 3, efDesc: 'Coordinación acuática y fuerza rotatoria.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/139.png' },
+                    { id: '140', name: 'Kabuto', type: 'Roca', cost: 2, efDesc: 'Reflejos defensivos y protección articular.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/140.png' },
+                    { id: '141', name: 'Kabutops', type: 'Roca', cost: 3, efDesc: 'Agilidad y velocidad de corte en desplazamientos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/141.png' },
+                    { id: '142', name: 'Aerodactyl', type: 'Roca', cost: 4, efDesc: 'Amplitud de envergadura en cruz y saltos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/142.png' },
+                    { id: '143', name: 'Snorlax', type: 'Normal', cost: 4, efDesc: 'Control de inercia y estabilidad de base pesada.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/143.png' },
+                    { id: '144', name: 'Articuno', type: 'Hielo', cost: 5, efDesc: 'Elegancia en vuelo y control de la respiración.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/144.png' },
+                    { id: '145', name: 'Zapdos', type: 'Eléctrico', cost: 5, efDesc: 'Potencia de salto y velocidad en carrera.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/145.png' },
+                    { id: '146', name: 'Moltres', type: 'Fuego', cost: 5, efDesc: 'Resistencia cardiorrespiratoria de alto nivel.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/146.png' },
+                    { id: '147', name: 'Dratini', type: 'Dragón', cost: 2, efDesc: 'Flexibilidad ondulatoria y progresión motriz.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/147.png' },
+                    { id: '148', name: 'Dragonair', type: 'Dragón', cost: 3, efDesc: 'Equilibrio dinámico y fluidez en recorridos.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/148.png' },
+                    { id: '149', name: 'Dragonite', type: 'Dragón', cost: 5, efDesc: 'Liderazgo positivo, juego limpio y polivalencia en deportes.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/149.png' },
+                    { id: '150', name: 'Mewtwo', type: 'Psíquico', cost: 6, efDesc: 'Concentración absoluta y dominio de habilidades complejas.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png' },
+                    { id: '151', name: 'Mew', type: 'Psíquico', cost: 6, efDesc: 'Versatilidad motriz total y adaptabilidad lúdica.', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/151.png' }
+                ],
+
+                playSound(type) {
+                    try {
+                        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        const now = ctx.currentTime;
+
+                        if (type === 'click') {
+                            osc.type = 'square';
+                            osc.frequency.setValueAtTime(440, now);
+                            gain.gain.setValueAtTime(0.08, now);
+                            osc.start(now);
+                            osc.stop(now + 0.05);
+                        } else if (type === 'token') {
+                            osc.type = 'triangle';
+                            osc.frequency.setValueAtTime(987.77, now);
+                            osc.frequency.setValueAtTime(1318.51, now + 0.08);
+                            gain.gain.setValueAtTime(0.1, now);
+                            osc.start(now);
+                            osc.stop(now + 0.2);
+                        } else if (type === 'victory') {
+                            const notes = [523.25, 659.25, 783.99, 1046.5];
+                            notes.forEach((freq, i) => {
+                                const o = ctx.createOscillator();
+                                const g = ctx.createGain();
+                                o.connect(g);
+                                g.connect(ctx.destination);
+                                o.type = 'square';
+                                o.frequency.setValueAtTime(freq, now + i * 0.1);
+                                g.gain.setValueAtTime(0.1, now + i * 0.1);
+                                o.start(now + i * 0.1);
+                                o.stop(now + i * 0.1 + 0.09);
+                            });
+                        }
+                    } catch(e) {}
+                },
+
+                get earnedBadgesCount() {
+                    return this.currentStudent.badges ? this.currentStudent.badges.filter(b => b).length : 0;
+                },
+                get filteredPokedex() {
+                    let list = this.pokedexList;
+                    if(this.pokeFilter === 'owned') list = list.filter(p => this.isOwned(p.name));
+                    if(this.pokeSearch.trim() !== '') {
+                        const q = this.pokeSearch.toLowerCase();
+                        list = list.filter(p => p.name.toLowerCase().includes(q) || p.id.includes(q) || p.type.toLowerCase().includes(q));
+                    }
+                    return list;
+                },
+                isOwned(pokeName) {
+                    return this.currentStudent.ownedPokemon && this.currentStudent.ownedPokemon.includes(pokeName);
+                },
+                openGymModal(gIndex) {
+                    this.selectedGymModal = gIndex;
+                    this.activeStudentTarget = this.currentStudent;
+                },
+                openGymModalForStudent(student, gIndex) {
+                    this.selectedGymModal = gIndex;
+                    this.activeStudentTarget = student;
+                },
+                ensureGymSessionsData(student) {
+                    if (!student.gymSessionsData || student.gymSessionsData.length !== this.gyms.length) {
+                        student.gymSessionsData = this.gyms.map(gym => new Array(gym.sessions.length).fill(false));
+                    }
+                },
+                isSessionCompleted(student, gIndex, sIndex) {
+                    if (!student) student = this.currentStudent;
+                    this.ensureGymSessionsData(student);
+                    return !!student.gymSessionsData[gIndex][sIndex];
+                },
+                toggleGymSession(student, gIndex, sIndex) {
+                    if (this.currentRole !== 'teacher') return;
+                    if (!student) student = this.currentStudent;
+                    this.ensureGymSessionsData(student);
+                    
+                    student.gymSessionsData[gIndex][sIndex] = !student.gymSessionsData[gIndex][sIndex];
+                    if (student.gymSessionsData[gIndex][sIndex]) {
+                        student.tokens = (student.tokens || 0) + 1;
+                    } else {
+                        student.tokens = Math.max(0, (student.tokens || 0) - 1);
+                    }
+
+                    const gym = this.gyms[gIndex];
+                    const completedCount = student.gymSessionsData[gIndex].filter(Boolean).length;
+                    if(!student.badges) student.badges = [false,false,false,false,false,false,false,false];
+                    if (completedCount === gym.sessions.length && !student.badges[gIndex]) {
+                        student.badges[gIndex] = true;
+                    } else if (completedCount < gym.sessions.length && student.badges[gIndex]) {
+                        student.badges[gIndex] = false;
+                    }
+                },
+                getGymCompletedCount(gIndex) {
+                    const target = this.activeStudentTarget || this.currentStudent;
+                    if (!target || !target.gymSessionsData || !target.gymSessionsData[gIndex]) return 0;
+                    return target.gymSessionsData[gIndex].filter(Boolean).length;
+                },
+
+                openSwapModal(idx) {
+                    this.activeSwapSlot = idx;
+                },
+                assignToSlot(idx, pokeName) {
+                    if(!this.currentStudent.activeTeam) this.currentStudent.activeTeam = [null,null,null,null,null,null];
+                    this.currentStudent.activeTeam[idx] = pokeName;
+                    this.activeSwapSlot = null;
+                    this.saveCurrentProfile();
+                },
+                addToFirstAvailableTeam(pokeName) {
+                    if (this.currentStudent.activeTeam.includes(pokeName)) return;
+                    const emptyIdx = this.currentStudent.activeTeam.indexOf(null);
+                    if (emptyIdx !== -1) {
+                        this.currentStudent.activeTeam[emptyIdx] = pokeName;
+                        this.saveCurrentProfile();
+                    }
+                },
+                removeFromTeam(idx) {
+                    this.currentStudent.activeTeam[idx] = null;
+                    this.saveCurrentProfile();
+                },
+
+                getThemeBg() {
+                    const th = this.currentStudent?.theme || 'emerald';
+                    switch(th) {
+                        case 'red': return 'bg-red-950 text-slate-100';
+                        case 'pink': return 'bg-pink-950 text-slate-100';
+                        case 'water': return 'bg-blue-950 text-slate-100';
+                        case 'electric': return 'bg-amber-950 text-slate-100';
+                        case 'dark': return 'bg-zinc-950 text-slate-100';
+                        default: return 'bg-emerald-950 text-slate-100';
+                    }
+                },
+                getHeaderClass() {
+                    const th = this.currentStudent?.theme || 'emerald';
+                    switch(th) {
+                        case 'red': return 'bg-red-900 border-red-700';
+                        case 'pink': return 'bg-pink-900 border-pink-700';
+                        case 'water': return 'bg-blue-900 border-blue-700';
+                        case 'electric': return 'bg-amber-900 border-amber-700';
+                        case 'dark': return 'bg-zinc-900 border-zinc-700';
+                        default: return 'bg-emerald-900 border-emerald-700';
+                    }
+                },
+                getCardClass() {
+                    const th = this.currentStudent?.theme || 'emerald';
+                    switch(th) {
+                        case 'red': return 'bg-red-950 border-red-600 text-red-50';
+                        case 'pink': return 'bg-pink-950 border-pink-600 text-pink-50';
+                        case 'water': return 'bg-blue-950 border-blue-600 text-blue-50';
+                        case 'electric': return 'bg-amber-950 border-amber-600 text-amber-50';
+                        case 'dark': return 'bg-zinc-900 border-purple-600 text-zinc-50';
+                        default: return 'bg-emerald-950 border-emerald-600 text-emerald-50';
+                    }
+                },
+                recruitPokemon(poke) {
+                    if (this.currentStudent.tokens >= poke.cost && !this.isOwned(poke.name)) {
+                        this.currentStudent.tokens -= poke.cost;
+                        if (!this.currentStudent.ownedPokemon) this.currentStudent.ownedPokemon = ['Pikachu'];
+                        this.currentStudent.ownedPokemon.push(poke.name);
+                        const emptyIdx = this.currentStudent.activeTeam.indexOf(null);
+                        if (emptyIdx !== -1) this.currentStudent.activeTeam[emptyIdx] = poke.name;
+                        this.saveCurrentProfile();
+                    }
+                },
+                redeemReward(reward) {
+                    if (this.currentStudent.tokens >= reward.cost) {
+                        this.currentStudent.tokens -= reward.cost;
+                        if (!this.currentStudent.redeemedRewards) this.currentStudent.redeemedRewards = [];
+                        this.currentStudent.redeemedRewards.push(reward.title);
+                        this.saveCurrentProfile();
+                    }
+                },
+                getPokeSprite(pokeName) {
+                    const found = this.pokedexList.find(p => p.name === pokeName);
+                    return found ? found.sprite : 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png';
+                },
+                async initFirebase() {
+                    try {
+                        const firebaseConfig = JSON.parse(__firebase_config);
+                        const app = FB.initializeApp(firebaseConfig);
+                        this.db = FB.getFirestore(app);
+                        this.auth = FB.getAuth(app);
+                        await FB.signInAnonymously(this.auth);
+                        await this.loadProfiles();
+                    } catch (e) {
+                        this.loadingProfiles = false;
+                    }
+                },
+                async loadProfiles() {
+                    if (!this.db) { this.loadingProfiles = false; return; }
+                    try {
+                        this.loadingProfiles = true;
+                        const snap = await FB.getDocs(FB.collection(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12'));
+                        this.profilesList = [];
+                        snap.forEach(d => {
+                            const data = d.data();
+                            if(!data.gymSessionsData) data.gymSessionsData = this.gyms.map(g => new Array(g.sessions.length).fill(false));
+                            this.profilesList.push({ id: d.id, ...data });
+                        });
+                    } catch (e) {
+                    } finally {
+                        this.loadingProfiles = false;
+                    }
+                },
+                openLoginModal(student) { this.selectedStudentForLogin = student; this.loginPasswordInput = ''; this.loginErrorMsg = ''; },
+                verifyAndLogin() {
+                    if (this.selectedStudentForLogin.password && this.selectedStudentForLogin.password !== this.loginPasswordInput) {
+                        this.loginErrorMsg = "Contraseña incorrecta."; return;
+                    }
+                    this.currentRole = 'student';
+                    this.selectStudent(this.selectedStudentForLogin);
+                    this.selectedStudentForLogin = null;
+                },
+                verifyTeacherLogin() {
+                    if (this.teacherPasswordInput !== 'profesor2026') { this.teacherErrorMsg = "Contraseña incorrecta."; return; }
+                    this.currentRole = 'teacher';
+                    this.loadProfiles();
+                },
+                async createNewStudent() {
+                    if (!this.newStudent.name.trim() || !this.newStudent.password) { this.createErrorMsg = "Rellena nombre y contraseña."; return; }
+                    const newId = 'student_' + Date.now();
+                    const initialGymSessions = this.gyms.map(gym => new Array(gym.sessions.length).fill(false));
+                    const studentObj = {
+                        id: newId, name: this.newStudent.name, school: this.newStudent.school || 'Colegio Kanto',
+                        gender: this.newStudent.gender, password: this.newStudent.password, pin: this.newStudent.pin,
+                        tokens: 0, theme: 'emerald', gymSessionsData: initialGymSessions,
+                        badges: [false,false,false,false,false,false,false,false],
+                        ownedPokemon: ['Pikachu'], activeTeam: ['Pikachu', null, null, null, null, null], redeemedRewards: []
+                    };
+                    if (this.db) {
+                        await FB.setDoc(FB.doc(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12', newId), studentObj);
+                    }
+                    this.profilesList.push(studentObj);
+                    this.currentRole = 'student';
+                    this.selectStudent(studentObj);
+                },
+                async saveCurrentProfile() {
+                    if (!this.currentStudentId || !this.db) return;
+                    await FB.setDoc(FB.doc(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12', this.currentStudentId), this.currentStudent, { merge: true });
+                },
+                selectStudent(student) {
+                    this.currentStudentId = student.id;
+                    this.currentStudent = JSON.parse(JSON.stringify(student));
+                    this.ensureGymSessionsData(this.currentStudent);
+                    if(!this.currentStudent.badges) this.currentStudent.badges = [false,false,false,false,false,false,false,false];
+                    if(!this.currentStudent.ownedPokemon) this.currentStudent.ownedPokemon = ['Pikachu'];
+                    if(!this.currentStudent.activeTeam) this.currentStudent.activeTeam = ['Pikachu', null, null, null, null, null];
+                    this.rotomMessage = `"¡Bzzzt! Sesión iniciada para ${this.currentStudent.name}. La Pokédex de 151 Pokémon y tu equipo titular están listos en la nube."`;
+                },
+                async teacherSaveStudent(student) {
+                    if(!this.db) return;
+                    await FB.setDoc(FB.doc(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12', student.id), student, { merge: true });
+                },
+                logout() { this.currentRole = null; this.currentStudentId = null; this.loadProfiles(); }
+            }
+        }
+    </script>
+</body>
+</html>
