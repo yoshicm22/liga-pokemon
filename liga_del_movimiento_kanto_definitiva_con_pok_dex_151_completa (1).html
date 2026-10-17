@@ -269,7 +269,11 @@
                         </div>
                     </template>
                     <template x-if="currentRole === 'teacher'">
-                        <button @click="playSound('click'); tab = 'teacher_dashboard'" class="px-3 py-2 rounded bg-amber-400 text-amber-950 font-bold">📋 Control Alumnos</button>
+                        <div class="flex flex-wrap gap-2">
+                            <button @click="playSound('click'); tab = 'aula'" :class="tab === 'aula' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">🏫 Aula</button>
+                            <button @click="playSound('click'); tab = 'pizarra'" :class="tab === 'pizarra' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">🖥️ Pizarra</button>
+                            <button @click="playSound('click'); tab = 'teacher_dashboard'" :class="tab === 'teacher_dashboard' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-200'" class="px-3 py-2 rounded border border-slate-700">📋 Control Alumnos</button>
+                        </div>
                     </template>
                 </nav>
             </div>
@@ -290,8 +294,123 @@
             </div>
         </div>
 
+        <!-- ZONA DE AULA: toda la clase de un vistazo -->
+        <template x-if="currentRole === 'teacher' && tab === 'aula'">
+            <div class="space-y-6 font-mono text-xs">
+                <div class="flex justify-between items-center flex-wrap gap-4">
+                    <div>
+                        <h3 class="font-retro text-base text-amber-300">🏫 Zona de Aula - Toda la clase</h3>
+                        <p class="text-slate-300 opacity-80">Qué toca hoy a cada alumno y canjes pendientes de entregar, sin entrar en cada perfil.</p>
+                    </div>
+                    <button @click="playSound('click'); loadProfiles()" class="px-3 py-2 rounded bg-amber-400 text-amber-950 font-retro">🔄 Actualizar</button>
+                </div>
+
+                <template x-if="profilesList.length === 0">
+                    <p class="bg-slate-900 p-6 rounded-xl border-2 border-slate-700 text-center text-slate-300">Aún no hay alumnos. Créalos desde "✨ Crear Alumno".</p>
+                </template>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <template x-for="student in profilesList" :key="student.id">
+                        <div class="bg-slate-900 p-4 rounded-xl border-2 border-slate-700 space-y-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <img :src="student.gender === 'boy' ? 'https://play.pokemonshowdown.com/sprites/trainers/red-gen3.png' : 'https://play.pokemonshowdown.com/sprites/trainers/leaf-gen3.png'" alt="" class="w-9 h-9 object-contain">
+                                    <h5 class="font-retro text-[10px] text-amber-300" x-text="student.name"></h5>
+                                </div>
+                                <span class="text-[10px] text-slate-300" x-text="'🪙 ' + (student.tokens || 0) + ' • 🏅 ' + (student.badges ? student.badges.filter(b=>b).length : 0) + '/8'"></span>
+                            </div>
+
+                            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                <p class="text-[10px] text-slate-400 mb-1">Hoy toca:</p>
+                                <template x-if="nextSession(student)">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-slate-200" x-text="gyms[nextSession(student).g].shortName + ' · ' + gyms[nextSession(student).g].sessions[nextSession(student).s]"></span>
+                                        <button @click="playSound('token'); markNextSession(student)" class="shrink-0 px-2 py-1 rounded bg-emerald-600 text-white font-retro text-[9px]">✓ Hecha</button>
+                                    </div>
+                                </template>
+                                <template x-if="!nextSession(student)">
+                                    <span class="text-amber-300">🏆 ¡Todas las sesiones completadas!</span>
+                                </template>
+                            </div>
+
+                            <div>
+                                <p class="text-[10px] text-slate-400 mb-1">Canjes pendientes de entregar:</p>
+                                <template x-if="!(student.redeemedRewards || []).length">
+                                    <span class="text-slate-500">Ninguno</span>
+                                </template>
+                                <div class="space-y-1">
+                                    <template x-for="(reward, rIdx) in (student.redeemedRewards || [])" :key="rIdx">
+                                        <div class="flex items-center justify-between gap-2 bg-amber-900/40 border border-amber-700 rounded px-2 py-1">
+                                            <span class="text-amber-200" x-text="'🎁 ' + reward"></span>
+                                            <button @click="playSound('click'); deliverReward(student, rIdx)" class="text-[9px] px-2 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">Entregado</button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- MODO PIZARRA -->
+        <template x-if="currentRole === 'teacher' && tab === 'pizarra'">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono text-xs">
+                <!-- Cronómetro -->
+                <div class="bg-slate-900 p-6 rounded-xl border-4 border-amber-500 space-y-4 text-center">
+                    <h4 class="font-retro text-xs text-amber-300">⏱️ Cronómetro</h4>
+                    <div class="font-retro text-4xl text-white" aria-live="polite" x-text="formatTime(timerLeft)"></div>
+                    <div class="flex justify-center items-center gap-2">
+                        <label for="timer-min" class="text-slate-300">Minutos:</label>
+                        <input id="timer-min" type="number" min="1" max="90" x-model.number="timerMinutes" @change="resetTimer()" class="w-16 p-1 rounded bg-black/60 border border-slate-700 text-center">
+                    </div>
+                    <div class="flex justify-center gap-2">
+                        <button @click="playSound('click'); toggleTimer()" class="px-4 py-2 rounded bg-emerald-600 text-white font-retro text-[10px]" x-text="timerId ? '⏸ Pausa' : '▶ Empezar'"></button>
+                        <button @click="playSound('click'); resetTimer()" class="px-4 py-2 rounded bg-slate-700 text-white font-retro text-[10px]">↺ Reiniciar</button>
+                    </div>
+                </div>
+
+                <!-- Sorteo y equipos -->
+                <div class="bg-slate-900 p-6 rounded-xl border-4 border-amber-500 space-y-4">
+                    <h4 class="font-retro text-xs text-amber-300 text-center">🎲 Sorteo y equipos</h4>
+                    <button @click="playSound('victory'); drawStudent()" class="w-full py-2 rounded bg-amber-400 text-amber-950 font-retro text-[10px]">Sacar un alumno al azar</button>
+                    <p class="text-center font-retro text-sm text-white min-h-[1.5rem]" aria-live="polite" x-text="drawnName"></p>
+                    <div class="flex items-center gap-2">
+                        <label for="team-n" class="text-slate-300">Nº equipos:</label>
+                        <input id="team-n" type="number" min="2" max="8" x-model.number="teamCount" class="w-16 p-1 rounded bg-black/60 border border-slate-700 text-center">
+                        <button @click="playSound('click'); makeTeams()" class="flex-1 py-1.5 rounded bg-emerald-600 text-white font-retro text-[10px]">Hacer equipos</button>
+                    </div>
+                    <div class="space-y-2">
+                        <template x-for="(team, tIdx) in teams" :key="tIdx">
+                            <div class="bg-slate-950 p-2 rounded border border-slate-800">
+                                <span class="text-amber-300 font-bold" x-text="'Equipo ' + (tIdx + 1) + ': '"></span>
+                                <span class="text-slate-200" x-text="team.join(', ')"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Medidores -->
+                <div class="bg-slate-900 p-6 rounded-xl border-4 border-amber-500 space-y-5">
+                    <h4 class="font-retro text-xs text-amber-300 text-center">📊 Medidores de la clase</h4>
+                    <template x-for="m in meters" :key="m.key">
+                        <div class="space-y-1">
+                            <div class="flex justify-between">
+                                <label :for="'meter-' + m.key" class="text-slate-200" x-text="m.label"></label>
+                                <span class="text-amber-300 font-bold" x-text="m.value + '/5'"></span>
+                            </div>
+                            <input :id="'meter-' + m.key" type="range" min="0" max="5" x-model.number="m.value" class="w-full accent-amber-400">
+                            <div class="h-3 rounded bg-slate-800 overflow-hidden">
+                                <div class="h-full transition-all" :class="m.color" :style="'width:' + (m.value * 20) + '%'"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
         <!-- TEACHER DASHBOARD -->
-        <template x-if="currentRole === 'teacher'">
+        <template x-if="currentRole === 'teacher' && tab === 'teacher_dashboard'">
             <div class="space-y-6">
                 <div class="flex justify-between items-center flex-wrap gap-4">
                     <div>
@@ -653,6 +772,13 @@
                     ownedPokemon: ['Pikachu'], activeTeam: ['Pikachu', null, null, null, null, null], redeemedRewards: []
                 },
 
+                timerMinutes: 5, timerLeft: 300, timerId: null,
+                drawnName: '', teamCount: 2, teams: [],
+                meters: [
+                    { key: 'conducta', label: '😇 Comportamiento', value: 3, color: 'bg-emerald-500' },
+                    { key: 'esfuerzo', label: '💪 Esfuerzo', value: 3, color: 'bg-amber-400' },
+                    { key: 'ruido', label: '🔊 Ruido', value: 2, color: 'bg-red-500' }
+                ],
                 pokeSearch: '',
                 pokeFilter: 'all',
 
@@ -924,6 +1050,56 @@
                         student.badges[gIndex] = false;
                     }
                 },
+                nextSession(student) {
+                    this.ensureGymSessionsData(student);
+                    for (let g = 0; g < this.gyms.length; g++) {
+                        const s = student.gymSessionsData[g].indexOf(false);
+                        if (s !== -1) return { g, s };
+                    }
+                    return null;
+                },
+                markNextSession(student) {
+                    const next = this.nextSession(student);
+                    if (!next) return;
+                    this.toggleGymSession(student, next.g, next.s);
+                    this.teacherSaveStudent(student);
+                },
+                deliverReward(student, rIdx) {
+                    const [reward] = student.redeemedRewards.splice(rIdx, 1);
+                    (student.deliveredRewards = student.deliveredRewards || []).push(reward);
+                    this.teacherSaveStudent(student);
+                },
+                formatTime(sec) {
+                    return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+                },
+                toggleTimer() {
+                    if (this.timerId) { clearInterval(this.timerId); this.timerId = null; return; }
+                    if (this.timerLeft <= 0) this.resetTimer();
+                    this.timerId = setInterval(() => {
+                        this.timerLeft--;
+                        if (this.timerLeft <= 0) { clearInterval(this.timerId); this.timerId = null; this.playSound('victory'); }
+                    }, 1000);
+                },
+                resetTimer() {
+                    clearInterval(this.timerId); this.timerId = null;
+                    this.timerLeft = Math.max(1, this.timerMinutes || 1) * 60;
+                },
+                shuffledNames() {
+                    const names = this.profilesList.map(s => s.name);
+                    for (let i = names.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [names[i], names[j]] = [names[j], names[i]];
+                    }
+                    return names;
+                },
+                drawStudent() {
+                    this.drawnName = this.shuffledNames()[0] || 'No hay alumnos';
+                },
+                makeTeams() {
+                    const n = Math.min(8, Math.max(2, this.teamCount || 2));
+                    this.teams = Array.from({ length: n }, () => []);
+                    this.shuffledNames().forEach((name, i) => this.teams[i % n].push(name));
+                },
                 getGymCompletedCount(gIndex) {
                     const target = this.activeStudentTarget || this.currentStudent;
                     if (!target || !target.gymSessionsData || !target.gymSessionsData[gIndex]) return 0;
@@ -1020,7 +1196,11 @@
                     }
                 },
                 async loadProfiles() {
-                    if (!this.db) { this.loadingProfiles = false; return; }
+                    if (!this.db) {
+                        // shortcut: sin Firebase los datos solo viven en este navegador; para compartir entre dispositivos hace falta un backend
+                        try { this.profilesList = JSON.parse(localStorage.getItem(this.localKey) || '[]'); } catch (e) { this.profilesList = []; }
+                        this.loadingProfiles = false; return;
+                    }
                     try {
                         this.loadingProfiles = true;
                         const snap = await FB.getDocs(FB.collection(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12'));
@@ -1047,6 +1227,7 @@
                 verifyTeacherLogin() {
                     if (this.teacherPasswordInput !== 'profesor2026') { this.teacherErrorMsg = "Contraseña incorrecta."; return; }
                     this.currentRole = 'teacher';
+                    this.tab = 'aula';
                     this.loadProfiles();
                 },
                 async createNewStudent() {
@@ -1060,16 +1241,24 @@
                         badges: [false,false,false,false,false,false,false,false],
                         ownedPokemon: ['Pikachu'], activeTeam: ['Pikachu', null, null, null, null, null], redeemedRewards: []
                     };
-                    if (this.db) {
-                        await FB.setDoc(FB.doc(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12', newId), studentObj);
-                    }
-                    this.profilesList.push(studentObj);
+                    await this.persistStudent(studentObj);
                     this.currentRole = 'student';
                     this.selectStudent(studentObj);
                 },
                 async saveCurrentProfile() {
-                    if (!this.currentStudentId || !this.db) return;
-                    await FB.setDoc(FB.doc(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12', this.currentStudentId), this.currentStudent, { merge: true });
+                    if (!this.currentStudentId) return;
+                    await this.persistStudent(this.currentStudent);
+                },
+                localKey: 'liga_kanto_alumnos_v1',
+                async persistStudent(student) {
+                    const copy = JSON.parse(JSON.stringify(student));
+                    const i = this.profilesList.findIndex(s => s.id === copy.id);
+                    if (i === -1) this.profilesList.push(copy); else if (this.profilesList[i] !== student) this.profilesList[i] = copy;
+                    if (this.db) {
+                        await FB.setDoc(FB.doc(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12', copy.id), copy, { merge: true });
+                    } else {
+                        try { localStorage.setItem(this.localKey, JSON.stringify(this.profilesList)); } catch (e) { alert('No se pudo guardar en este navegador.'); }
+                    }
                 },
                 selectStudent(student) {
                     this.currentStudentId = student.id;
@@ -1081,10 +1270,9 @@
                     this.rotomMessage = `"¡Bzzzt! Sesión iniciada para ${this.currentStudent.name}. La Pokédex de 151 Pokémon y tu equipo titular están listos en la nube."`;
                 },
                 async teacherSaveStudent(student) {
-                    if(!this.db) return;
-                    await FB.setDoc(FB.doc(this.db, 'artifacts', this.appId, 'public', 'data', 'secure_students_sessions_v12', student.id), student, { merge: true });
+                    await this.persistStudent(student);
                 },
-                logout() { this.currentRole = null; this.currentStudentId = null; this.loadProfiles(); }
+                logout() { clearInterval(this.timerId); this.timerId = null; this.tab = 'map'; this.currentRole = null; this.currentStudentId = null; this.loadProfiles(); }
             }
         }
     </script>
