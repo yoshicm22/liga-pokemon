@@ -120,13 +120,17 @@ async function update(key, fn, tries = 8) {
 const rlKey = (k) => "rl/" + sha(k).slice(0, 32);
 async function attempt(key, max, windowMs, lockMs) {
   const now = Date.now();
-  const r = await update(rlKey(key), (cur) => {
-    if (cur?.until && cur.until > now) return undefined;
-    const x = cur && now - cur.first < windowMs && !cur.until ? cur : { count: 0, first: now };
-    x.count++;
-    if (x.count > max) x.until = now + lockMs;
-    return x;
-  });
+  let r;
+  // 25 tablets a la vez pelean por este contador: más reintentos y, si aun así no se puede contar, se deja pasar (nunca dejar fuera a un niño)
+  try {
+    r = await update(rlKey(key), (cur) => {
+      if (cur?.until && cur.until > now) return undefined;
+      const x = cur && now - cur.first < windowMs && !cur.until ? cur : { count: 0, first: now };
+      x.count++;
+      if (x.count > max) x.until = now + lockMs;
+      return x;
+    }, 30);
+  } catch { return { ok: true }; }
   if (r === null || (r.until && r.until > now)) {
     const cur = await store.get(rlKey(key), { type: "json" });
     return { ok: false, mins: Math.max(1, Math.ceil(((cur?.until || now) - now) / 60000)) };
