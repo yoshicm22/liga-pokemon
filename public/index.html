@@ -882,7 +882,7 @@
                         </div>
                         <p class="text-sm text-slate-100 font-bold" x-text="aulaSession ? aulaSession.gymShort + ' · ' + aulaSession.title : 'Sin sesión programada.'"></p>
                         <button @click="openPlanEditor()" class="px-4 py-2 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700">✏️ Editar el plan de esta sesión (fases y material)</button></div><div class="bg-slate-900 p-6 rounded-xl border-4 border-amber-500 shadow-2xl space-y-4 "><p class="font-retro text-base text-amber-300">🏆 Cerrar unidad y abrir cofre</p>
-                        <p class="text-sm text-slate-300">Cuando termines una unidad, gana el escuadrón con mejor media de sesiones por alumno. Los demás reciben su premio de consolación.</p>
+                        <p class="text-sm text-slate-300">Cuando termines una unidad, gana el escuadrón con mejor media de sesiones por alumno. Los demás reciben su premio de consolación. Cada legendario se entrega <b>una sola vez en toda la liga</b>; en la consolación, si el alumno ya tenía ese Pokémon, recibe <b>su valor en fichas</b>.</p>
                         <select x-model.number="unitSel" aria-label="Unidad" class="w-full px-3 py-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600 min-h-[48px]">
                             <template x-for="(gy, gi) in gyms" :key="gi"><option :value="gi" x-text="(gi + 1) + '. ' + gy.city + (unitClosed(gi) ? ' (cerrada)' : '')"></option></template>
                         </select>
@@ -2674,15 +2674,15 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     let items = [], win = -1, head = '', text = '';
                     if (ch.kind === 'legend') {
                         head = '¡' + ch.name + ' shiny!';
-                        text = 'Tu escuadrón ganó ' + city + '. ' + ch.name + ' brillante ya es tuyo.';
+                        text = 'Tu escuadrón ganó ' + city + '. ' + ch.name + ' brillante ya está en tu Pokédex. Cada legendario se entrega una sola vez en toda la liga: ningún otro escuadrón lo recibirá.';
                         items = ['Articuno', 'Zapdos', 'Moltres', 'Dragonite', 'Mewtwo', 'Mew']
                             .map(n => ({ name: n, img: this.legendSprite(n), shiny: true })).filter(i => i.img);
                         win = items.findIndex(i => i.name === ch.name);
                     } else if (ch.kind === 'consolation') {
                         head = ch.tokens ? ch.name + ' repetido: +' + ch.tokens + ' fichas' : '¡' + ch.name + '!';
                         text = ch.tokens
-                            ? 'Premio de consolación en ' + city + '. Ya tenías a ' + ch.name + ', así que te llevas ' + ch.tokens + ' fichas.'
-                            : 'Premio de consolación en ' + city + '. ' + ch.name + ' se une a tu equipo.';
+                            ? 'Premio de consolación en ' + city + '. Ya tenías a ' + ch.name + ', así que en su lugar te llevas ' + ch.tokens + ' fichas.'
+                            : 'Premio de consolación en ' + city + '. ' + ch.name + ' ya está en tu Pokédex. Si te hubiera tocado uno repetido, habrías recibido sus fichas.';
                         items = this.consolationList.map(p => ({ name: p.name, img: p.sprite, shiny: false }));
                         win = items.findIndex(i => i.name === ch.name);
                     } else if (ch.kind === 'choose') {
