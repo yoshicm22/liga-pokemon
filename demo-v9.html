@@ -179,11 +179,13 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
   /* Boton "pulsable": sombra inferior, baja al pulsar. Sin filter (hay sprites dentro de botones) */
   html body button[class*="bg-"]:not([class*="ring"]):not([class*="bg-transparent"]):not(:disabled) {
     box-shadow: 0 3px 0 rgba(0, 0, 0, .35);
-    transition: transform .12s ease, box-shadow .12s ease, background-color .15s ease;
+    transition: transform .12s ease, background-color .15s ease;
   }
   html body button[class*="bg-"]:not([class*="ring"]):not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 0 rgba(0, 0, 0, .4); }
   html body button[class*="bg-"]:not([class*="ring"]):not(:disabled):active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, .4); }
   html body button:disabled { cursor: not-allowed; }
+  /* En la pizarra proyectada los botones no rebotan */
+  html body .z-\[80\] button { transform: none; }
 
   /* "Salir": rojo GBA con texto blanco, antes red-200 sobre red-900 y fino */
   html body button.bg-red-900.text-red-200 {
@@ -330,7 +332,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                         </p>
                     </div>
                     <div class="pt-6 border-t-2 border-amber-500 flex justify-between items-center text-xs text-slate-700">
-                        <span>Firma del Maestro de EF: ______________________</span>
+                        <span>Firma del profesor de EF: ______________________</span>
                         <span>Sello del Colegio Kanto ⭐</span>
                     </div>
                 </div>
