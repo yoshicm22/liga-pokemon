@@ -142,7 +142,16 @@ const clearAttempts = (key) => store.delete(rlKey(key));
 
 /* ---------- datos ---------- */
 const teacherView = (p) => { const { passHash, ...rest } = p; return rest; };
-const studentView = (p) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return rest; };
+// racha: listas pasadas seguidas, de la más reciente hacia atrás, sin falta (el retraso cuenta como venir). Al alumno solo le llega el número, nunca las fechas
+const streakOf = (p, closed) => {
+  const from = new Date(p.createdAt || 0).toISOString().slice(0, 10);
+  const att = isObj(p.att) ? p.att : {};
+  const ds = [...new Set([...closed, ...Object.keys(att)])].filter((d) => d >= from).sort().reverse();
+  let n = 0;
+  for (const d of ds) { if (att[d] === "F") break; n++; }
+  return n;
+};
+const studentView = (p, closed = []) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return { ...rest, streak: streakOf(p, closed) }; };
 const getAttClosed = async () => (await store.get("meta/att-closed", { type: "json" })) || [];
 const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) && (() => { const x = new Date(d + "T00:00:00Z"); return !Number.isNaN(x.getTime()) && x.toISOString().startsWith(d); })();
 const shortName = (n) => {
@@ -376,7 +385,7 @@ export default async (req, context) => {
       if (!checkPw(b.password ?? "", s.passHash)) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!");
       await clearAttempts(`login:${id}`);
       const token = await sign({ role: "student", sid: s.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(s) });
+      return json({ token, profile: studentView(s, await getAttClosed()) });
     }
 
     if (method === "POST" && path === "/teacher/login") {
@@ -398,7 +407,7 @@ export default async (req, context) => {
     if (session.role === "student") {
       if (path === "/me" && method === "GET") {
         const s = await getStudent(session.sid);
-        return s ? json({ profile: studentView(s) }) : fail(404, "Perfil no encontrado.");
+        return s ? json({ profile: studentView(s, await getAttClosed()) }) : fail(404, "Perfil no encontrado.");
       }
       if (path === "/me" && method === "PUT") {
         const b = await readBody(req);
@@ -429,7 +438,7 @@ export default async (req, context) => {
           // el alumno solo puede vaciar sus avisos (ya vistos)
           if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length === 0) s.pendingNotifications = [];
         });
-        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: studentView(out, await getAttClosed()) });
       }
       if (path === "/me/chest-seen" && method === "POST") {
         const b = await readBody(req);
@@ -438,7 +447,7 @@ export default async (req, context) => {
           // con dos dispositivos abiertos, cada uno cierra su propio cofre y no el del otro
           s.pendingChests = q.length && (b.g === undefined || q[0].g === b.g) ? q.slice(1) : q;
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
       }
       if (path === "/me/choose" && method === "POST") {
         const b = await readBody(req);
@@ -452,7 +461,7 @@ export default async (req, context) => {
           s.pendingChoice = pc.slice(1);
           pushNotice(s, { title: "¡Pokémon shiny conseguido!", desc: name + " brillante ya es tuyo.", icon: "✨" });
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
       }
       return fail(403, "No permitido.");
     }

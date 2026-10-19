@@ -20,7 +20,7 @@ const D=[{"id": "demo_0", "name": "Lucía Martín", "school": "Colegio Kanto", "
 const db={s:D,cfg:{currentWeek:5},units:[]};let me=null;
 const today=new Date().toLocaleDateString('sv-SE');const dAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toLocaleDateString('sv-SE');};
 D.forEach((s,i)=>{s.att={};if(i===9)s.att[today]='F';if(i===12)s.att[today]='R';if(i===9||i===13)s.att[dAgo(3)]='F';if(i===9)s.att[dAgo(7)]='F';if(i===6)s.att[dAgo(5)]='R';});
-db.closed=[dAgo(3),dAgo(5),dAgo(7)];
+db.closed=[dAgo(3),dAgo(5),dAgo(7),dAgo(10),dAgo(12),dAgo(14)];
 const T0={mode:'countdown',status:'idle',durationSec:300,startedAt:0,pausedElapsedMs:0,work:30,rest:15,rounds:6};
 db.board={noise:'green',behavior:4,effort:6,phase:0,absent:[],drawn:[],draw:null,timer:{...T0}};
 db.plans={'1-3':{warmup:'Juego de la serpiente: movilidad y carrera suave',main:'Circuito de 6 estaciones de resistencia por parejas',cooldown:'Estiramientos y respiración con música tranquila',material:'Conos, aros y cuerdas'}};
@@ -32,7 +32,7 @@ const cl=o=>JSON.parse(JSON.stringify(o));
 const R=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{'content-type':'application/json'}});
 const E=(m,s)=>R({error:m},s);
 const short=n=>{const p=n.trim().split(' ').filter(Boolean);return p.length>1?p[0]+' '+[...p[1]][0].toUpperCase()+'.':p[0];};
-const sv=s=>{const c=cl(s);['weight','height','wingspan','hrRest','note','att'].forEach(k=>delete c[k]);return c;};
+const sv=s=>{const c=cl(s);['weight','height','wingspan','hrRest','note','att'].forEach(k=>delete c[k]);const a=s.att||{};let n=0;for(const d of [...new Set([...db.closed,...Object.keys(a)])].sort().reverse()){if(a[d]==='F')break;n++;}c.streak=n;return c;};
 const tot=()=>{const t={Rayo:0,Cascada:0,Roca:0};db.s.forEach(s=>s.gymSessionsData.forEach(r=>t[s.faction]+=r.filter(Boolean).length));return t;};
 const get=id=>db.s.find(s=>s.id===id);
 const note=(s,n)=>{s.pendingNotifications=[...s.pendingNotifications,n].slice(-50);};
@@ -124,6 +124,10 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
             .no-print { display: none !important; }
             .print-only { display: block !important; }
         }
+    /* Racha: --r (0-8) = intensidad del halo; el parpadeo solo si no hay reduced-motion */
+    .km-racha-on{background-image:radial-gradient(circle at 2.5rem 50%,rgba(251,146,60,calc(.06 + var(--r)*.03)),transparent 65%)}
+    .km-llama{transform-origin:50% 90%;filter:drop-shadow(0 0 calc(3px + var(--r)*2px) rgba(251,146,60,calc(.35 + var(--r)*.08)))}
+    @media (prefers-reduced-motion:no-preference){.km-llama{animation:kmllama 1.6s ease-in-out infinite}@keyframes kmllama{0%,100%{transform:scale(1) rotate(-2deg)}35%{transform:scale(1.06,.97) rotate(2deg)}65%{transform:scale(.97,1.05) rotate(-1deg)}}}
     @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
         button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px }
 </style>
@@ -1009,6 +1013,14 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                                         <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain">
                                         <strong x-text="currentStudent.tokens"></strong>
                                     </span>
+                                </div>
+                            </div>
+                            <!-- Racha: clases seguidas sin faltar; la llama crece con la racha -->
+                            <div class="flex items-center gap-4 bg-black/40 p-3.5 rounded-xl border" :class="currentStudent.streak ? 'border-orange-400 km-racha-on' : 'border-slate-700'" :style="'--r:' + Math.min(currentStudent.streak || 0, 8)">
+                                <span aria-hidden="true" class="leading-none w-16 text-center shrink-0" :class="currentStudent.streak ? 'km-llama' : 'grayscale opacity-40'" :style="'font-size:' + (1.75 + Math.min(currentStudent.streak || 0, 8) * 0.25) + 'rem'">🔥</span>
+                                <div>
+                                    <p class="text-base font-extrabold" :class="currentStudent.streak ? 'text-orange-300' : 'text-slate-300'" x-text="!currentStudent.streak ? 'Tu racha empieza en la próxima clase' : currentStudent.streak === 1 ? 'Llevas 1 clase participando' : 'Llevas ' + currentStudent.streak + ' clases seguidas participando'"></p>
+                                    <p class="text-sm text-slate-400" x-text="currentStudent.streak ? '¡Ven a la próxima para que la llama crezca!' : 'Cada clase que vengas, la llama crece.'"></p>
                                 </div>
                             </div>
                         </div>
