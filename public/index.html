@@ -50,7 +50,7 @@
             50% { filter: drop-shadow(0 0 12px #fbbf24) brightness(1.3); }
         }
         .animate-shiny { animation: shiny-glow 2s infinite; }
-        .poke-silhouette { filter: brightness(0) invert(.6); opacity: .5; }
+        .poke-silhouette { filter: brightness(0) invert(.75); opacity: .8; }
         ::-webkit-scrollbar { width: 12px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.4); border-radius: 6px; }
@@ -1114,10 +1114,12 @@
                             <h3 class="font-retro text-base md:text-lg text-amber-300">📖 Estación Colección: Álbum Pokédex & Equipo Titular</h3>
                         </div>
                         <div class="flex gap-3 font-mono text-sm flex-wrap">
-                            <input type="text" x-model="pokeSearch" placeholder="Buscar Pokémon..." class="p-3 bg-black/60 border border-slate-700 rounded-xl text-slate-200 text-base">
-                            <button @click="pokeFilter = 'all'" :class="pokeFilter === 'all' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 rounded-xl font-retro border border-slate-700">Todos (151)</button>
-                            <button @click="pokeFilter = 'owned'" :class="pokeFilter === 'owned' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 rounded-xl font-retro border border-slate-700">Mis cromos</button>
-                            <button @click="pokeFilter = 'missing'" :class="pokeFilter === 'missing' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 rounded-xl font-retro border border-slate-700">Me faltan</button>
+                            <input type="search" aria-label="Buscar Pokémon" x-model="pokeSearch" placeholder="Buscar Pokémon..." class="p-3 bg-black/60 border border-slate-700 rounded-xl text-slate-200 text-base">
+                            <div role="group" aria-label="Filtrar cromos" class="flex gap-3 flex-wrap">
+                            <button type="button" @click="pokeFilter = 'all'" :aria-pressed="pokeFilter === 'all'" :class="pokeFilter === 'all' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 min-h-[44px] rounded-xl font-retro border border-slate-700">Todos (151)</button>
+                            <button type="button" @click="pokeFilter = 'owned'" :aria-pressed="pokeFilter === 'owned'" :class="pokeFilter === 'owned' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 min-h-[44px] rounded-xl font-retro border border-slate-700">Mis cromos</button>
+                            <button type="button" @click="pokeFilter = 'missing'" :aria-pressed="pokeFilter === 'missing'" :class="pokeFilter === 'missing' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 min-h-[44px] rounded-xl font-retro border border-slate-700">Me faltan</button>
+                            </div>
                         </div>
                     </div>
 
@@ -1146,28 +1148,28 @@
                         </div>
                     </div>
 
-                    <p class="font-retro text-xs text-amber-300" x-text="'📒 Tu álbum: ' + ownedCount + ' de 151 cromos'"></p>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-[600px] overflow-y-auto pr-2 pt-3 text-sm">
+                    <p role="status" class="font-retro text-xs text-amber-300" x-text="'📒 Tu álbum: ' + ownedCount + ' de 151 cromos'"></p>
+                    <div tabindex="0" role="region" aria-label="Álbum de cromos" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-[600px] overflow-y-auto pr-2 pt-3 text-sm">
                         <template x-for="poke in filteredPokedex" :key="poke.id">
-                            <div class="relative rounded-2xl border-4 p-3 flex flex-col items-center text-center gap-2 transition-transform" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'bg-gradient-to-b from-amber-800 via-amber-900 to-amber-950 border-amber-200 shadow-[0_0_18px_rgba(251,191,36,.7)] ring-2 ring-amber-400/60' : 'bg-gradient-to-b from-slate-700 to-slate-950 border-amber-400 shadow-lg shadow-amber-500/30') : (isLegend(poke.name) ? 'bg-gradient-to-b from-purple-950 via-indigo-950 to-slate-950 border-indigo-400 border-dashed shadow-[0_0_14px_rgba(129,140,248,.45)]' : 'bg-slate-900 border-slate-600 border-dashed')">
+                            <div role="group" :aria-label="(isLegend(poke.name) && !isOwned(poke.name)) ? 'Legendario sorpresa, aún no lo tienes' : poke.name + (isOwned(poke.name) ? ', conseguido' : ', te falta')" class="relative rounded-2xl border-4 p-3 flex flex-col items-center text-center gap-2 transition-transform" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'bg-gradient-to-b from-amber-800 via-amber-900 to-amber-950 border-amber-200 shadow-[0_0_18px_rgba(251,191,36,.7)] ring-2 ring-amber-400/60' : 'bg-gradient-to-b from-slate-700 to-slate-950 border-amber-400 shadow-lg shadow-amber-500/30') : (isLegend(poke.name) ? 'bg-gradient-to-b from-purple-950 via-indigo-950 to-slate-950 border-indigo-400 border-dashed shadow-[0_0_14px_rgba(129,140,248,.45)]' : 'bg-slate-900 border-slate-600 border-dashed')">
                                 <span x-show="isOwned(poke.name) && isShiny(poke.name)" class="absolute -top-2 -right-1 text-xl motion-safe:animate-pulse" aria-hidden="true">✨</span>
-                                <span class="self-start text-xs font-retro rounded px-1.5 py-0.5" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" x-text="'Nº ' + poke.id"></span>
+                                <span class="self-start text-sm font-retro rounded px-1.5 py-0.5" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'"><span x-show="isOwned(poke.name)" aria-hidden="true">✓ </span><span x-text="'Nº ' + poke.id"></span></span>
                                 <div class="relative w-24 h-24 flex items-center justify-center rounded-full" :class="isOwned(poke.name) ? 'bg-sky-200/20 ring-2 ring-amber-300/70' : (isLegend(poke.name) ? 'bg-indigo-900/60 ring-2 ring-indigo-400/50' : 'bg-slate-800')">
-                                    <img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" :alt="isOwned(poke.name) ? poke.name : 'Pokémon que aún no tienes'">
-                                    <template x-if="!isOwned(poke.name) && isLegend(poke.name)"><span class="absolute font-retro text-3xl text-indigo-100 motion-safe:animate-pulse" aria-hidden="true">?</span></template>
+                                    <template x-if="isOwned(poke.name) || !isLegend(poke.name)"><img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" :alt="isOwned(poke.name) ? poke.name + (isShiny(poke.name) ? ', versión shiny' : '') : ''"></template>
+                                    <template x-if="!isOwned(poke.name) && isLegend(poke.name)"><span class="absolute font-retro text-3xl text-indigo-100 motion-safe:animate-pulse">?<span class="sr-only">Legendario sorpresa</span></span></template>
                                 </div>
                                 <h4 class="font-retro text-sm" :class="isOwned(poke.name) ? 'text-white' : (isLegend(poke.name) ? 'text-indigo-200' : 'text-slate-300')" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
                                 <template x-if="isOwned(poke.name)">
                                     <div class="w-full space-y-2">
-                                        <span class="text-xs text-amber-300 block" x-text="poke.type + (isShiny(poke.name) ? ' • ✨ Shiny' : '')"></span>
-                                        <button @click="speakText(poke.efDesc)" class="w-full min-h-[44px] py-2 text-xs rounded-lg bg-slate-800 text-amber-300" :aria-label="'Escuchar qué entrena ' + poke.name">🔊 ¿Qué entrena?</button>
+                                        <span class="text-sm text-amber-300 block"><span x-text="poke.type"></span><span x-show="isShiny(poke.name)"> • <span aria-hidden="true">✨</span> Shiny</span></span>
+                                        <button @click="speakText(poke.efDesc)" class="w-full min-h-[44px] py-2 text-xs rounded-lg bg-slate-800 text-amber-300" :aria-label="'Escuchar qué entrena ' + poke.name"><span aria-hidden="true">🔊</span> ¿Qué entrena?</button>
                                         <template x-if="canShiny(poke.name)">
-                                            <button @click="toggleShiny(poke.name)" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
+                                            <button type="button" @click="toggleShiny(poke.name)" :aria-pressed="isShiny(poke.name)" :aria-label="'Brillo shiny de ' + poke.name" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
                                         </template>
                                     </div>
                                 </template>
                                 <template x-if="!isOwned(poke.name) && isLegend(poke.name)">
-                                    <p class="text-xs text-indigo-100 font-bold rounded-lg bg-indigo-900/70 px-2 py-1">🎁 ¡Sorpresa! Solo sale en los cofres</p>
+                                    <p class="text-xs text-indigo-100 font-bold rounded-lg bg-indigo-900/70 px-2 py-1"><span aria-hidden="true">🎁</span> ¡Sorpresa! Solo sale en los cofres</p>
                                 </template>
                                 <template x-if="!isOwned(poke.name) && !isLegend(poke.name)">
                                     <div class="w-full space-y-2">
@@ -1175,7 +1177,7 @@
                                             <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
                                             <span x-text="poke.cost + (poke.cost > 1 ? ' fichas' : ' ficha')"></span>
                                         </p>
-                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-400 border-slate-700'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
+                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" :aria-label="'Reclutar ' + poke.name + ', cuesta ' + poke.cost + ' fichas'" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-200 border-slate-700 cursor-not-allowed'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
                                     </div>
                                 </template>
                             </div>
