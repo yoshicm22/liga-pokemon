@@ -126,3 +126,8 @@ Una fila por alumno con tres botones grandes ✅ presente / ⏰ tarde / ❌ falt
   - El alumno ve el aviso **🎰 Abrir mi cofre** en Mi Base siempre que tenga cofres sin abrir, además de la apertura automática al entrar.
 - **El brillo shiny solo se consigue con cofres.** Los alumnos que ya lo tenían activado lo conservan.
 - Si cambias el listado de Pokémon o sus precios en `index.html`, actualiza `POKE_COST` en `netlify/functions/api.mjs` (y `LEGENDS` / `CONSOLATION`).
+
+## Pokédex como álbum de cromos (v10)
+- La Colección es un álbum: los Pokémon que tienes salen a color (con ✓); los que te faltan, en silueta gris con su precio y el botón Reclutar (o «Te faltan N» si no llegan las fichas).
+- Filtros Todos / Mis cromos / Me faltan y contador «Tu álbum: N de 151 cromos».
+- Los 6 legendarios (Articuno, Zapdos, Moltres, Dragonite, Mewtwo, Mew) ya **no se pueden comprar**: salen como «Legendario sorpresa» y solo llegan en cofres. El servidor rechaza su compra; quien ya tenía alguno lo conserva.
