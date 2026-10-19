@@ -320,6 +320,18 @@ function multisetDiff(oldArr, newArr) {
 }
 const pushNotice = (s, n) => { s.pendingNotifications = [...(s.pendingNotifications || []), n].slice(-50); };
 
+/* ---------- buzón: preguntas del alumno al profe (solo las lee el profe) ---------- */
+const MAIL_MAX = 300, MAIL_PER_DAY = 5, MAIL_KEEP = 30;
+const madridDay = (t) => new Date(t).toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" });
+const getMail = async (sid) => { const v = await store.get("mail/" + sid, { type: "json" }); return Array.isArray(v) ? v : []; };
+// el punto rojo del alumno = respuestas que aún no ha visto (se recalcula, así nunca se queda colgado)
+const syncMailNew = (sid, list, notify) => mutate(sid, (s) => {
+  s.mailNew = list.filter((x) => x.reply && !x.seen).length;
+  if (notify) pushNotice(s, { title: "¡El profe te ha respondido!", desc: "Mira tu respuesta en la pestaña Buzón.", icon: "✉️" });
+});
+// guarda las últimas MAIL_KEEP, pero nunca tira una pregunta sin responder; null si están todas sin responder
+const trimMail = (l) => { const out = [...l]; while (out.length > MAIL_KEEP) { const i = out.findIndex((x) => x.reply); if (i < 0) return null; out.splice(i, 1); } return out; };
+
 /* ---------- manejador ---------- */
 export default async (req, context) => {
   try {
@@ -467,6 +479,32 @@ export default async (req, context) => {
         });
         return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
       }
+      if (path === "/me/messages" && method === "GET") return json({ messages: await getMail(session.sid) });
+      if (path === "/me/messages" && method === "POST") {
+        const b = await readBody(req);
+        const text = clean(b.text, MAIL_MAX + 1);
+        if (text.length < 2) return fail(400, "Escribe tu pregunta.");
+        if (text.length > MAIL_MAX) return fail(400, `Máximo ${MAIL_MAX} letras.`);
+        let err = null;
+        const list = await update("mail/" + session.sid, (cur) => {
+          const l = Array.isArray(cur) ? cur : [];
+          const today = madridDay(Date.now());
+          if (l.filter((x) => madridDay(x.at) === today).length >= MAIL_PER_DAY) { err = fail(429, `Ya has mandado ${MAIL_PER_DAY} preguntas hoy. ¡Mañana puedes mandar más!`); return undefined; }
+          const next = trimMail([...l, { id: crypto.randomBytes(6).toString("hex"), text, at: Date.now(), read: false }]);
+          if (!next) { err = fail(429, "Tu buzón está lleno. Espera a que el profe responda."); return undefined; }
+          return next;
+        });
+        if (err) return err;
+        return json({ messages: list }, 201);
+      }
+      if (path === "/me/messages/seen" && method === "POST") {
+        // solo las que el alumno ha visto en pantalla: una respuesta que llega entre medias sigue marcada
+        const b = await readBody(req);
+        const ids = Array.isArray(b.ids) ? b.ids.slice(0, MAIL_KEEP).map(String) : [];
+        const list = (await update("mail/" + session.sid, (cur) => (Array.isArray(cur) ? cur.map((x) => (x.reply && ids.includes(x.id) ? { ...x, seen: true } : x)) : undefined))) || [];
+        const out = await syncMailNew(session.sid, list);
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+      }
       return fail(403, "No permitido.");
     }
 
@@ -556,6 +594,7 @@ export default async (req, context) => {
         const old = await getStudent(m[1]);
         if (old?.nameKey) await store.delete(old.nameKey);
         await store.delete("students/" + m[1]);
+        await store.delete("mail/" + m[1]);
         return json({ ok: true });
       }
       if (path === "/teacher/board" && method === "GET") {
@@ -645,6 +684,32 @@ export default async (req, context) => {
         const chest = { g, city: rec.city, winners: rec.winners, prizes: rec.prizes, at: Date.now() };
         await update("board/main", (cur) => ({ ...DEFAULT_BOARD, ...(cur || {}), timer: { ...DEFAULT_TIMER, ...(cur?.timer || {}) }, chest }));
         return json({ record: { ...rec, done: true } });
+      }
+      if (path === "/teacher/messages" && method === "GET") {
+        const students = await allStudents();
+        const lists = await Promise.all(students.map(async (st) => (await getMail(st.id)).map((x) => ({ ...x, sid: st.id, name: st.name, faction: st.faction }))));
+        return json({ messages: lists.flat().sort((a, b) => b.at - a.at) });
+      }
+      const mm = path.match(/^\/teacher\/messages\/([\w-]{1,60})\/([a-f0-9]{12})$/);
+      if (mm && (method === "PUT" || method === "DELETE")) {
+        const b = method === "PUT" ? await readBody(req) : {};
+        const reply = "reply" in b ? clean(b.reply, 500) : null;
+        if (reply !== null && reply.length < 1) return fail(400, "Escribe la respuesta.");
+        let found = false, changed = false;
+        const list = await update("mail/" + mm[1], (cur) => {
+          const l = Array.isArray(cur) ? cur : [];
+          const i = l.findIndex((x) => x.id === mm[2]);
+          if (i < 0) return undefined;
+          found = true;
+          if (method === "DELETE") return l.filter((_, j) => j !== i);
+          // repetir la misma respuesta no vuelve a avisar al alumno
+          if (reply !== null && reply !== l[i].reply) { changed = true; Object.assign(l[i], { reply, replyAt: Date.now(), read: true, seen: false }); }
+          if (typeof b.read === "boolean") l[i].read = b.read;
+          return l;
+        });
+        if (!found) return fail(404, "Mensaje no encontrado.");
+        if (changed || method === "DELETE") await syncMailNew(mm[1], list, changed);
+        return json({ ok: true });
       }
       if (path === "/teacher/units" && method === "GET") return json(await getUnits());
       if (path === "/teacher/end-class" && method === "POST") {
