@@ -144,15 +144,17 @@ const clearAttempts = (key) => store.delete(rlKey(key));
 const teacherView = (p) => { const { passHash, ...rest } = p; return rest; };
 // racha: listas pasadas seguidas, de la más reciente hacia atrás, sin falta (el retraso cuenta como venir). Al alumno solo le llega el número, nunca las fechas
 const streakOf = (p, closed) => {
-  const from = new Date(p.createdAt || 0).toISOString().slice(0, 10);
+  const from = new Date(Number.isFinite(p.createdAt) ? p.createdAt : 0).toISOString().slice(0, 10);
   const att = isObj(p.att) ? p.att : {};
-  const ds = [...new Set([...closed, ...Object.keys(att)])].filter((d) => d >= from).sort().reverse();
+  // solo listas pasadas (marcar a alguien ya da la lista por pasada)
+  const ds = closed.filter((d) => d >= from).sort().reverse();
   let n = 0;
   for (const d of ds) { if (att[d] === "F") break; n++; }
   return n;
 };
 const studentView = (p, closed = []) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return { ...rest, streak: streakOf(p, closed) }; };
-const getAttClosed = async () => (await store.get("meta/att-closed", { type: "json" })) || [];
+// si falla la lectura, la racha sale a 0 en vez de tumbar el login
+const getAttClosed = async () => { try { const v = await store.get("meta/att-closed", { type: "json" }); return Array.isArray(v) ? v : []; } catch { return []; } };
 const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) && (() => { const x = new Date(d + "T00:00:00Z"); return !Number.isNaN(x.getTime()) && x.toISOString().startsWith(d); })();
 const shortName = (n) => {
   const parts = String(n).trim().split(" ").filter(Boolean);
