@@ -50,6 +50,7 @@
             50% { filter: drop-shadow(0 0 12px #fbbf24) brightness(1.3); }
         }
         .animate-shiny { animation: shiny-glow 2s infinite; }
+        .poke-silhouette { filter: brightness(0) invert(.75); opacity: .8; }
         ::-webkit-scrollbar { width: 12px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.4); border-radius: 6px; }
@@ -58,8 +59,111 @@
             .no-print { display: none !important; }
             .print-only { display: block !important; }
         }
+    /* Racha: --r (0-8) = intensidad del halo; el parpadeo solo si no hay reduced-motion */
+    .km-racha-on{background-image:radial-gradient(circle at 2.5rem 50%,rgba(251,146,60,calc(.06 + var(--r)*.03)),transparent 65%)}
+    .km-llama{transform-origin:50% 90%;filter:drop-shadow(0 0 calc(3px + var(--r)*2px) rgba(251,146,60,calc(.35 + var(--r)*.08)))}
+    @media (prefers-reduced-motion:no-preference){.km-llama{animation:kmllama 1.6s ease-in-out infinite}@keyframes kmllama{0%,100%{transform:scale(1) rotate(-2deg)}35%{transform:scale(1.06,.97) rotate(2deg)}65%{transform:scale(.97,1.05) rotate(-1deg)}}}
     @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
         button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px }
+</style>
+<style id="tema-pro">
+/* ===== TEMA PRO "Kanto GBA" - bloque unico, pegar justo antes de </head> ===== */
+/* Todo dentro de @media screen: la impresion (#cards-print, diploma) queda intacta. */
+:root {
+  --kanto-navy: #0f1d3a;      /* paneles oscuros (sustituye slate-900) */
+  --kanto-navy-2: #1a2b52;    /* botones/chips en reposo (sustituye slate-800) */
+  --kanto-bevel: #6078a8;     /* bisel azul GBA: scrollbar, bordes secundarios */
+  --kanto-bevel-dark: #243a6b;/* anillo interior de los cuadros de dialogo */
+  --kanto-gold: #d8a21c;      /* UNICO borde principal de tarjetas de contenido */
+  --kanto-yellow: #fbbf24;    /* foco y seleccion (10:1 sobre navy) */
+  --kanto-red: #b3261e;       /* Salir / peligro (blanco encima: 6.5:1) */
+  --kanto-r-card: 8px;        /* un solo radio para tarjetas */
+  --kanto-r-btn: 6px;         /* un solo radio para botones, chips e inputs */
+}
+
+@media screen {
+  /* --- 1. Paneles: navy GBA unificado (los temas de alumno usan otras clases y no se tocan) --- */
+  html body .bg-slate-900 { background-color: var(--kanto-navy); }
+  html body .bg-slate-800 { background-color: var(--kanto-navy-2); }
+  /* Gris apagado ilegible sobre navy (<4.5:1): subir a slate-400 solo dentro de paneles oscuros */
+  html body :is(.bg-slate-900, .bg-slate-800, .bg-slate-950) :is(.text-slate-500, .text-slate-600) { color: #94a3b8; }
+
+  /* --- 2. Tarjetas: borde 3px + anillo interior (cuadro de dialogo GBA) --- */
+  html body .border-4:not(canvas):not(img) { border-width: 3px; }
+  html body .border-4:is(.border-amber-400, .border-amber-500, .border-amber-600) { border-color: var(--kanto-gold); }
+  /* Solo bloques con padding propio y sin ring-* (no pisa avatares ni indicadores de estado) */
+  html body .border-4[class*=" p-"]:not([class*="ring"]) {
+    box-shadow: inset 0 0 0 2px var(--kanto-bevel-dark), 0 4px 0 rgba(0, 0, 0, .35);
+  }
+
+  /* --- 3. Radios: tarjetas = 8px, botones/chips = 6px; no tocar canvas, sprites ni circulos --- */
+  html body :is(.rounded-xl, .rounded-2xl, .rounded-3xl):not(canvas):not(img) { border-radius: var(--kanto-r-card); }
+  html body :is(.rounded, .rounded-lg, .rounded-md):not(canvas):not(img) { border-radius: var(--kanto-r-btn); }
+
+  /* --- 4. Cabecera --- */
+  html body header.border-b-4 {
+    border-bottom-width: 3px;
+    box-shadow: inset 0 -2px 0 rgba(255, 255, 255, .12), 0 4px 0 rgba(0, 0, 0, .3);
+  }
+
+  /* --- 5. Tipografia: un solo peso para titulos Nunito en mayusculas --- */
+  html body .font-retro { font-weight: 800; letter-spacing: .04em; }
+  html body { line-height: 1.55; }
+
+  /* --- 6. Botones: objetivo tactil >=44px y texto legible en el panel del profesor --- */
+  html body button { min-height: 44px; }
+  html body:not(.kid-mode) button:is(.text-xs, .text-\[9px\], .text-\[10px\], .text-\[11px\]):not(.z-\[80\] *) { font-size: .9375rem; }
+  html body:not(.kid-mode) :is(.text-xs, .text-\[10px\], .text-\[11px\]):not(button):not(.z-\[80\] *) { font-size: .875rem; }
+
+  /* Boton "pulsable": sombra inferior, baja al pulsar. Sin filter (hay sprites dentro de botones) */
+  html body button[class*="bg-"]:not([class*="ring"]):not([class*="bg-transparent"]):not(:disabled) {
+    box-shadow: 0 3px 0 rgba(0, 0, 0, .35);
+    transition: transform .12s ease, background-color .15s ease;
+  }
+  html body button[class*="bg-"]:not([class*="ring"]):not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 0 rgba(0, 0, 0, .4); }
+  html body button[class*="bg-"]:not([class*="ring"]):not(:disabled):active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, .4); }
+  html body button:disabled { cursor: not-allowed; }
+  /* En la pizarra proyectada los botones no rebotan */
+  html body .z-\[80\] button { transform: none; }
+
+  /* "Salir": rojo GBA con texto blanco, antes red-200 sobre red-900 y fino */
+  html body button.bg-red-900.text-red-200 {
+    background-color: var(--kanto-red); color: #fff; border: 2px solid #7a1812; padding: .25rem .875rem; font-weight: 800;
+  }
+  html body button.bg-red-900.text-red-200:hover { background-color: #c9362d; }
+
+  /* Aviso "ALERTA": animate-pulse bajaba la opacidad a 50% y el texto se perdia */
+  html body span.bg-red-600.animate-pulse { animation: none; background-color: var(--kanto-red); }
+
+  /* --- 7. Cabecera en movil: el escuadron no se parte y las 4 pestanas van en rejilla 2x2 --- */
+  html body header span.bg-black\/60 { white-space: nowrap; }
+  @media (max-width: 639px) {
+    html body header .gap-5 { width: 100%; flex-wrap: wrap; gap: .75rem; }
+    html body header nav, html body header nav > div { width: 100%; }
+    html body header nav > div { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    html body header nav button { transform: none; }
+  }
+
+  /* --- 8. Formularios y foco --- */
+  html body :is(input, select, textarea):not([type=checkbox]):not([type=radio]):not([type=range]) {
+    border-radius: var(--kanto-r-btn); min-height: 44px;
+  }
+  html body :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 3px solid var(--kanto-yellow); outline-offset: 3px;
+  }
+  /* sobre fondos claros (informe, diploma, tarjetas) el amarillo no se ve */
+  html body :is(.bg-white, .bg-amber-50, .bg-amber-50\/50) :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline-color: var(--kanto-navy); }
+
+  /* --- 9. Scrollbar a juego --- */
+  html { scrollbar-color: var(--kanto-bevel) var(--kanto-navy); }
+  ::-webkit-scrollbar-track { background: var(--kanto-navy); }
+  ::-webkit-scrollbar-thumb { background: var(--kanto-bevel); border: 2px solid var(--kanto-navy); border-radius: 6px; }
+}
+
+/* --- 10. Movimiento reducido: ya existe la regla global; aqui tambien quitamos el rebote de botones --- */
+@media (prefers-reduced-motion: reduce) {
+  html body button:hover, html body button:active { transform: none !important; }
+}
 </style>
 </head>
 <body x-data="appState()" x-init="initApp()" :class="getThemeBg()" class="min-h-screen flex flex-col transition-colors duration-300 relative">
@@ -67,12 +171,12 @@
     <!-- SEQUENTIAL LOGIN NOTIFICATION MODAL -->
     <template x-if="activeLoginNotification">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-            <div class="bg-slate-900 max-w-lg w-full p-8 rounded-3xl border-8 border-amber-400 shadow-2xl space-y-6 text-center font-mono animate-badge relative">
+            <div role="dialog" aria-modal="true" aria-labelledby="ln-t" @keydown.escape.window="showNextLoginNotification()" class="bg-slate-900 max-w-lg w-full p-8 rounded-3xl border-8 border-amber-400 shadow-2xl space-y-6 text-center font-mono animate-badge relative">
                 <div class="text-6xl animate-bounce" x-text="activeLoginNotification.icon || '🎁'"></div>
-                <span class="text-amber-400 font-retro text-xs block mb-1">¡MENSAJE DEL PROFESOR / MAESTRO!</span>
-                <h3 class="font-retro text-base text-amber-300" x-text="activeLoginNotification.title"></h3>
+                <span class="text-amber-400 font-retro text-xs block mb-1">¡MENSAJE DEL PROFESOR!</span>
+                <h3 id="ln-t" class="font-retro text-base text-amber-300" x-text="activeLoginNotification.title"></h3>
                 <p class="text-slate-200 text-sm leading-relaxed" x-text="activeLoginNotification.desc"></p>
-                <button @click="showNextLoginNotification()" class="w-full py-4 bg-amber-400 text-amber-950 font-retro text-xs rounded-xl shadow-xl hover:bg-amber-300 font-bold">
+                <button x-init="$nextTick(() => $el.focus())" @click="showNextLoginNotification()" class="w-full py-4 bg-amber-400 text-amber-950 font-retro text-xs rounded-xl shadow-xl hover:bg-amber-300 font-bold">
                     🚀 ¡SIGUIENTE MENSAJE / CONTINUAR!
                 </button>
             </div>
@@ -105,7 +209,7 @@
 
     <template x-if="showChooseModal">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" @keydown.escape.window="showChooseModal = false">
-            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto p-5 rounded-2xl border-4 border-amber-400 space-y-4" role="dialog" aria-label="Elegir Pokémon shiny">
+            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto p-5 rounded-2xl border-4 border-amber-400 space-y-4" role="dialog" aria-modal="true" aria-label="Elegir Pokémon shiny" x-init="$nextTick(() => $el.querySelector('button').focus())">
                 <div class="flex items-center justify-between gap-3">
                     <h3 class="text-xl font-bold text-amber-200">Elige tu Pokémon shiny</h3>
                     <button @click="showChooseModal = false" aria-label="Cerrar" class="w-12 h-12 rounded-lg bg-slate-800 text-slate-200 text-xl">✕</button>
@@ -169,7 +273,7 @@
                         </p>
                     </div>
                     <div class="pt-6 border-t-2 border-amber-500 flex justify-between items-center text-xs text-slate-700">
-                        <span>Firma del Maestro de EF: ______________________</span>
+                        <span>Firma del profesor de EF: ______________________</span>
                         <span>Sello del Colegio Kanto ⭐</span>
                     </div>
                 </div>
@@ -192,7 +296,7 @@
                             </span>
                             <h1 class="font-retro pixel-title text-lg md:text-2xl text-amber-300 mt-2">LIGA DEL MOVIMIENTO - KANTO</h1>
                             <p class="text-sm md:text-base text-slate-200 font-mono max-w-2xl mx-auto leading-relaxed">
-                                ¡Campaña Definitiva! El <b>Team Rocket</b> amenaza el polideportivo. Únete a tu clan, supera los 8 gimnasios, desbloquea variantes <b>Shiny</b>, escucha la banda sonora <b>Lo-Fi Chill</b> con <b>Rotom-Voz</b> y defiende la escuela.
+                                ¡El <b>Team Rocket</b> amenaza el polideportivo! Únete a tu escuadrón, supera los 8 gimnasios, consigue Pokémon <b>Shiny</b> (brillantes), escucha música relajante con <b>Rotom</b> y defiende la escuela.
                             </p>
                         </div>
 
@@ -202,7 +306,7 @@
                                 <span>ALERTA DE ROTOM: ¡EL TEAM ROCKET AMENAZA KANTO!</span>
                             </div>
                             <p class="text-slate-300 leading-relaxed">
-                                "¡Bzzzt! Los agentes del Team Rocket han sido vistos merodeando el polideportivo. Solo los entrenadores unidos en <b>Escuadrones Cooperativos</b> y superando las 8 Unidades Didácticas podrán detener sus malvados planes."
+                                "¡Bzzzt! Los agentes del Team Rocket han sido vistos merodeando el polideportivo. Solo los entrenadores y entrenadoras unidos en <b>escuadrones</b> y superando los 8 gimnasios podrán parar sus planes."
                             </p>
                         </div>
 
@@ -223,11 +327,11 @@
                                 </div>
                                 <div>
                                     <h1 class="font-retro text-sm text-amber-300">ACCESO SEGURO DE ALUMNOS</h1>
-                                    <p class="text-xs text-slate-300 font-mono">Selecciona tu perfil o inicia sesión con contraseña</p>
+                                    <p class="text-xs text-slate-300 font-mono">Elige tu perfil y escribe tu código de 3 emojis</p>
                                 </div>
                             </div>
                             <button @click="playSound('click'); showLanding = true" class="bg-slate-800 text-slate-200 px-4 py-2 rounded text-xs font-mono border border-slate-600 hover:bg-slate-700">
-                                📖 Lore & Normas
+                                📖 Historia y normas
                             </button>
                         </div>
 
@@ -251,10 +355,10 @@
                                         👥 Alumnos
                                     </button>
                                     <button @click="playSound('click'); authTab = 'register'" :class="authTab === 'register' ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'" class="flex-1 py-3 rounded text-xs font-retro border border-slate-700 transition min-w-[130px]">
-                                        ✨ Crear Alumno
+                                        ✨ Crear mi perfil
                                     </button>
                                     <button @click="playSound('click'); authTab = 'teacher'" :class="authTab === 'teacher' ? 'bg-amber-400 text-slate-950 font-bold' : 'bg-amber-900/60 text-amber-300'" class="flex-1 py-3 rounded text-xs font-retro border border-amber-600 transition min-w-[130px]">
-                                        👨‍‍🏫 Maestro EF
+                                        👨‍‍🏫 Profesor
                                     </button>
                                 </div>
 
@@ -308,7 +412,7 @@
 
                                 <template x-if="authTab === 'register'">
                                     <div class="space-y-5 font-mono text-sm">
-                                        <h3 class="font-retro text-sm text-amber-300">✨ Registrar Nuevo Alumno:</h3>
+                                        <h3 class="font-retro text-sm text-amber-300">✨ Crear mi perfil:</h3>
                                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
                                                 <label class="block text-slate-300 font-bold mb-2">Nombre:</label>
@@ -357,10 +461,10 @@
                                     <div class="space-y-5 font-mono text-sm">
                                         <h3 class="font-retro text-sm text-amber-300">👨‍🏫 Acceso Profesor</h3>
                                         <div>
-                                            <label class="block text-slate-300 font-bold mb-2">Contraseña Maestro:</label>
+                                            <label class="block text-slate-300 font-bold mb-2">Contraseña del profesor:</label>
                                             <input type="password" x-model="teacherPasswordInput" placeholder="Contraseña del profesor..." class="w-full p-3 rounded bg-black/60 border border-amber-500 text-slate-200 text-base">
                                         </div>
-                                        <button @click="verifyTeacherLogin()" class="w-full py-3.5 rounded text-xs bg-amber-400 text-amber-950 font-retro font-bold">🔑 Entrar al Panel Maestro</button>
+                                        <button @click="verifyTeacherLogin()" class="w-full py-3.5 rounded text-xs bg-amber-400 text-amber-950 font-retro font-bold">🔑 Entrar al panel del profesor</button>
                                         <p class="text-xs text-red-400 text-center" x-text="teacherErrorMsg"></p>
                                     </div>
                                 </template>
@@ -396,10 +500,10 @@
                     <div class="w-14 h-14 bg-amber-400 border-4 border-amber-900 flex items-center justify-center shadow rounded-lg text-3xl">👨‍🏫</div>
                     <div>
                         <div class="flex items-center gap-3">
-                            <h1 class="font-retro text-sm md:text-base text-amber-300">PANEL MAESTRO EF</h1>
+                            <h1 class="font-retro text-sm md:text-base text-amber-300">PANEL DEL PROFESOR</h1>
                             <button @click="playSound('click'); logout()" class="text-xs bg-red-900 text-red-200 px-3 py-1 rounded font-mono">Salir</button>
                         </div>
-                        <p class="text-xs text-slate-300 font-mono mt-0.5">Validador de Sesiones & Facciones</p>
+                        <p class="text-xs text-slate-300 font-mono mt-0.5">Misiones y escuadrones</p>
                     </div>
                 </div>
             </template>
@@ -451,7 +555,7 @@
                         <i class="fa-solid fa-volume-high"></i> 🔊 Escuchar Rotom
                     </button>
                 </div>
-                <h2 class="font-retro text-base md:text-lg text-amber-300 mt-2 mb-1" x-text="currentRole === 'teacher' ? '¡Panel de Control Maestro!' : ('¡Entrenador ' + currentStudent.name + '!')"></h2>
+                <h2 class="font-retro text-base md:text-lg text-amber-300 mt-2 mb-1" x-text="currentRole === 'teacher' ? '¡Panel del profesor!' : ('¡A entrenar, ' + currentStudent.name + '!')"></h2>
                 <p class="text-sm md:text-base leading-relaxed font-mono opacity-95" x-text="rotomMessage"></p>
             </div>
         </div>
@@ -677,7 +781,7 @@
                         </template>
 
                         <div class="bg-slate-900 p-4 md:p-6 rounded-xl border-4 border-amber-500 shadow-2xl space-y-3">
-                            <p class="font-retro text-lg text-amber-300 text-center" x-text="'Camino a ' + gyms[mapGymIdx].city + ' · media de pantallas por escuadrón'"></p>
+                            <p class="font-retro text-lg text-amber-300 text-center" x-text="'Camino a ' + gyms[mapGymIdx].city + ' · media de sesiones por escuadrón'"></p>
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                 <canvas class="w-full rounded-lg border-2 border-slate-700" style="image-rendering:pixelated" role="img" aria-label="Mapa de la región de Kanto"
                                     x-effect="KantoMap.region($el, { cur: mapGymIdx + 1, sel: mapGymIdx + 1 })"></canvas>
@@ -902,7 +1006,7 @@
                         </div>
                         <p class="text-xs text-slate-400">Se abren con Excel o Google Sheets. Por privacidad no incluyen peso, altura, pulso ni notas privadas.</p></div><div class="bg-slate-900 p-6 rounded-xl border-4 border-amber-500 shadow-2xl space-y-4 lg:col-span-2"><p class="font-retro text-base text-amber-300">⌨️ Ayuda rápida</p>
                         <ul class="text-sm text-slate-300 space-y-2 list-disc pl-5">
-                            <li><b>Clase</b>: pasa lista y marca la misión de la sesión. Cambia entre <i>Pasar lista</i> y <i>Misión cumplida</i> arriba de la cuadrícula.</li>
+                            <li><b>Clase</b>: pasa lista y marca la misión de la sesión. Cambia entre <i>Asistencia</i> y <i>Misión</i> arriba de la lista.</li>
                             <li><b>Pizarra</b>: para el proyector. Ábrela en el ordenador del aula, pulsa <i>Presentar</i> y maneja todo desde tu tablet.</li>
                             <li><b>Alumnos</b>: busca, ordena y abre la ficha de cada alumno (fichas, sesiones, código, datos físicos, nota, informe).</li>
                             <li><b>Atajos en la pizarra</b>: Espacio/→ fase siguiente · ← anterior · T cronómetro · R reiniciar · 1/2/3 semáforo · B/E comportamiento/esfuerzo · P presentar · F pantalla completa.</li>
@@ -940,9 +1044,17 @@
                                 <div class="bg-black/40 p-3.5 rounded-xl border border-slate-700">
                                     <span class="text-slate-400 block text-xs mb-1">FICHAS</span>
                                     <span class="font-retro text-amber-400 text-sm md:text-base flex items-center justify-center gap-1">
-                                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain">
+                                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
                                         <strong x-text="currentStudent.tokens"></strong>
                                     </span>
+                                </div>
+                            </div>
+                            <!-- Racha: clases seguidas sin faltar; la llama crece con la racha -->
+                            <div class="flex items-center gap-4 bg-black/40 p-3.5 rounded-xl border" :class="currentStudent.streak ? 'border-orange-400 km-racha-on' : 'border-slate-700'" :style="'--r:' + Math.min(currentStudent.streak || 0, 8)">
+                                <span aria-hidden="true" class="leading-none w-16 text-center shrink-0" :class="currentStudent.streak ? 'km-llama' : 'grayscale opacity-40'" :style="'font-size:' + (1.75 + Math.min(currentStudent.streak || 0, 8) * 0.25) + 'rem'">🔥</span>
+                                <div>
+                                    <p class="text-base font-extrabold" :class="currentStudent.streak ? 'text-orange-300' : 'text-slate-300'" x-text="!currentStudent.streak ? 'Tu racha empieza en la próxima clase' : currentStudent.streak === 1 ? 'Llevas 1 clase participando' : 'Llevas ' + currentStudent.streak + ' clases seguidas participando'"></p>
+                                    <p class="text-sm text-slate-400" x-text="currentStudent.streak ? '¡Ven a la próxima para que la llama crezca!' : 'Cada clase que vengas, la llama crece.'"></p>
                                 </div>
                             </div>
                         </div>
@@ -1110,19 +1222,22 @@
                                 <i class="fa-solid fa-arrow-left group-hover:-translate-x-1 transition-transform"></i>
                                 <span>⚡ VOLVER A MI BASE</span>
                             </button>
-                            <h3 class="font-retro text-base md:text-lg text-amber-300">📖 Estación Colección: Pokédex 151 (Shiny) & Equipo Titular</h3>
+                            <h3 class="font-retro text-base md:text-lg text-amber-300">📖 Estación Colección: Álbum Pokédex & Equipo Titular</h3>
                         </div>
                         <div class="flex gap-3 font-mono text-sm flex-wrap">
-                            <input type="text" x-model="pokeSearch" placeholder="Buscar Pokémon..." class="p-3 bg-black/60 border border-slate-700 rounded-xl text-slate-200 text-base">
-                            <button @click="pokeFilter = 'all'" :class="pokeFilter === 'all' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 rounded-xl font-retro border border-slate-700">Todos (151)</button>
-                            <button @click="pokeFilter = 'owned'" :class="pokeFilter === 'owned' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 rounded-xl font-retro border border-slate-700">En Posesión</button>
+                            <input type="search" aria-label="Buscar Pokémon" x-model="pokeSearch" placeholder="Buscar Pokémon..." class="p-3 bg-black/60 border border-slate-700 rounded-xl text-slate-200 text-base">
+                            <div role="group" aria-label="Filtrar cromos" class="flex gap-3 flex-wrap">
+                            <button type="button" @click="pokeFilter = 'all'" :aria-pressed="pokeFilter === 'all'" :class="pokeFilter === 'all' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 min-h-[44px] rounded-xl font-retro border border-slate-700">Todos (151)</button>
+                            <button type="button" @click="pokeFilter = 'owned'" :aria-pressed="pokeFilter === 'owned'" :class="pokeFilter === 'owned' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 min-h-[44px] rounded-xl font-retro border border-slate-700">Mis cromos</button>
+                            <button type="button" @click="pokeFilter = 'missing'" :aria-pressed="pokeFilter === 'missing'" :class="pokeFilter === 'missing' ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" class="px-4 py-2.5 min-h-[44px] rounded-xl font-retro border border-slate-700">Me faltan</button>
+                            </div>
                         </div>
                     </div>
 
                     <div class="bg-slate-900 p-8 rounded-xl border-4 border-slate-700 space-y-5 font-mono text-sm">
                         <div class="flex justify-between items-center flex-wrap gap-3">
                             <h4 class="font-retro text-sm text-amber-300">⭐ TU EQUIPO TITULAR (Máx 6)</h4>
-                            <span class="text-xs text-slate-400">💡 Los Pokémon con esfuerzo excepcional desbloquean variante Shiny dorada</span>
+                            <span class="text-xs text-slate-400">✨ El brillo shiny solo sale en los cofres</span>
                         </div>
                         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
                             <template x-for="(slot, idx) in (currentStudent.activeTeam || [null,null,null,null,null,null])" :key="idx">
@@ -1144,45 +1259,38 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[600px] overflow-y-auto pr-2 font-mono text-sm">
+                    <p role="status" class="font-retro text-xs text-amber-300" x-text="'📒 Tu álbum: ' + ownedCount + ' de 151 cromos'"></p>
+                    <div tabindex="0" role="region" aria-label="Álbum de cromos" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-[600px] overflow-y-auto pr-2 pt-3 text-sm">
                         <template x-for="poke in filteredPokedex" :key="poke.id">
-                            <div class="bg-slate-950 p-6 border-4 rounded-xl flex flex-col justify-between space-y-5 relative" :class="isOwned(poke.name) ? 'border-amber-400' : 'border-slate-800'">
-                                <div class="absolute top-4 right-4 text-xs font-retro px-3 py-1 rounded flex items-center gap-1" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'">
-                                    <template x-if="!isOwned(poke.name)">
-                                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-3 h-3 object-contain">
-                                    </template>
-                                    <span x-text="isOwned(poke.name) ? '✓ EN POSESIÓN' : (poke.cost + ' Token' + (poke.cost > 1 ? 's' : ''))"></span>
+                            <div role="group" :aria-label="(isLegend(poke.name) && !isOwned(poke.name)) ? 'Legendario sorpresa, aún no lo tienes' : poke.name + (isOwned(poke.name) ? ', conseguido' : ', te falta')" class="relative rounded-2xl border-4 p-3 flex flex-col items-center text-center gap-2 transition-transform" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'bg-gradient-to-b from-amber-800 via-amber-900 to-amber-950 border-amber-200 shadow-[0_0_18px_rgba(251,191,36,.7)] ring-2 ring-amber-400/60' : 'bg-gradient-to-b from-slate-700 to-slate-950 border-amber-400 shadow-lg shadow-amber-500/30') : (isLegend(poke.name) ? 'bg-gradient-to-b from-purple-950 via-indigo-950 to-slate-950 border-indigo-400 border-dashed shadow-[0_0_14px_rgba(129,140,248,.45)]' : 'bg-slate-900 border-slate-600 border-dashed')">
+                                <span x-show="isOwned(poke.name) && isShiny(poke.name)" class="absolute -top-2 -right-1 text-xl motion-safe:animate-pulse" aria-hidden="true">✨</span>
+                                <span class="self-start text-sm font-retro rounded px-1.5 py-0.5" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'"><span x-show="isOwned(poke.name)" aria-hidden="true">✓ </span><span x-text="'Nº ' + poke.id"></span></span>
+                                <div class="relative w-24 h-24 flex items-center justify-center rounded-full" :class="isOwned(poke.name) ? 'bg-sky-200/20 ring-2 ring-amber-300/70' : (isLegend(poke.name) ? 'bg-indigo-900/60 ring-2 ring-indigo-400/50' : 'bg-slate-800')">
+                                    <template x-if="isOwned(poke.name) || !isLegend(poke.name)"><img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" alt=""></template>
+                                    <template x-if="!isOwned(poke.name) && isLegend(poke.name)"><span class="absolute font-retro text-3xl text-indigo-100 motion-safe:animate-pulse">?<span class="sr-only">Legendario sorpresa</span></span></template>
                                 </div>
-                                <div class="flex items-center gap-5">
-                                    <div class="w-20 h-20 bg-black/50 border border-slate-700 rounded-2xl flex items-center justify-center p-2 flex-shrink-0">
-                                        <img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-16 h-16 object-contain" :class="isShiny(poke.name) ? 'animate-shiny' : ''" onerror="this.onerror=null;this.style.visibility='hidden'" alt="Poke">
-                                    </div>
-                                    <div>
-                                        <span class="text-xs font-retro text-amber-400" x-text="'Nº ' + poke.id + ' • ' + poke.type"></span>
-                                        <h4 class="font-retro text-sm text-slate-100 mt-2" x-text="poke.name"></h4>
-                                        <template x-if="isShiny(poke.name)"><span class="text-xs text-amber-300 font-retro block mt-1">✨ Versión Shiny</span></template>
-                                    </div>
-                                </div>
-                                <div class="bg-black/40 p-3.5 rounded-xl border border-slate-800 text-xs space-y-2">
-                                    <div class="flex justify-between items-center">
-                                        <p class="text-amber-300 font-bold">🏃‍♂️ Perfil Físico / EF:</p>
-                                        <button @click="speakText(poke.efDesc)" class="text-amber-400 hover:text-amber-300 text-xs" title="Escuchar descripción">
-                                            <i class="fa-solid fa-volume-high"></i>
-                                        </button>
-                                    </div>
-                                    <p class="text-slate-200" x-text="poke.efDesc"></p>
-                                </div>
-                                <div class="space-y-3">
-                                    <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" class="w-full py-3 font-retro text-xs rounded-xl border shadow transition flex items-center justify-center gap-2" :class="isOwned(poke.name) ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-amber-400 text-amber-950 border-amber-600 font-bold'" :disabled="isOwned(poke.name) || currentStudent.tokens < poke.cost">
-                                        <template x-if="!isOwned(poke.name)">
-                                            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain">
+                                <h4 :aria-hidden="!isOwned(poke.name) && isLegend(poke.name)" class="font-retro text-sm" :class="isOwned(poke.name) ? 'text-white' : (isLegend(poke.name) ? 'text-indigo-200' : 'text-slate-300')" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
+                                <template x-if="isOwned(poke.name)">
+                                    <div class="w-full space-y-2">
+                                        <span class="text-sm text-amber-300 block"><span x-text="poke.type"></span><span x-show="isShiny(poke.name)"> • <span aria-hidden="true">✨</span> Shiny</span></span>
+                                        <button @click="speakText(poke.efDesc)" class="w-full min-h-[44px] py-2 text-xs rounded-lg bg-slate-800 text-amber-300" :aria-label="'Escuchar qué entrena ' + poke.name"><span aria-hidden="true">🔊</span> ¿Qué entrena?</button>
+                                        <template x-if="canShiny(poke.name)">
+                                            <button type="button" @click="toggleShiny(poke.name)" :aria-label="(isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo') + ' de ' + poke.name" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
                                         </template>
-                                        <span x-text="isOwned(poke.name) ? 'Reclutado' : ('Reclutar (' + poke.cost + ' Tokens)')"></span>
-                                    </button>
-                                    <template x-if="isOwned(poke.name) && canShiny(poke.name)">
-                                        <button @click="toggleShiny(poke.name)" class="w-full py-2 font-retro text-xs rounded-xl border border-amber-500 bg-amber-500/20 text-amber-300 hover:bg-amber-500/40 transition" x-text="isShiny(poke.name) ? 'Quitar brillo shiny' : 'Poner brillo shiny'"></button>
-                                    </template>
-                                </div>
+                                    </div>
+                                </template>
+                                <template x-if="!isOwned(poke.name) && isLegend(poke.name)">
+                                    <p class="text-xs text-indigo-100 font-bold rounded-lg bg-indigo-900/70 px-2 py-1"><span aria-hidden="true">🎁</span> ¡Sorpresa! Solo sale en los cofres</p>
+                                </template>
+                                <template x-if="!isOwned(poke.name) && !isLegend(poke.name)">
+                                    <div class="w-full space-y-2">
+                                        <p class="flex items-center justify-center gap-1 text-amber-300 font-bold">
+                                            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
+                                            <span x-text="poke.cost + (poke.cost > 1 ? ' fichas' : ' ficha')"></span>
+                                        </p>
+                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" :aria-label="(currentStudent.tokens >= poke.cost ? 'Reclutar ' : 'Te faltan ' + (poke.cost - currentStudent.tokens) + ' fichas para ') + poke.name + ', cuesta ' + poke.cost + ' fichas'" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-200 border-slate-700 cursor-not-allowed'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
+                                    </div>
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -1195,15 +1303,15 @@
                             <i class="fa-solid fa-arrow-left group-hover:-translate-x-1 transition-transform"></i>
                             <span>⚡ VOLVER A MI BASE</span>
                         </button>
-                        <h3 class="font-retro text-base md:text-lg text-amber-300">🎁 Estación Premios: Tienda de Privilegios & Hall de la Fama</h3>
+                        <h3 class="font-retro text-base md:text-lg text-amber-300">🎁 Premios: tienda de privilegios y Salón de la Fama</h3>
                     </div>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-mono text-sm">
                         <template x-for="reward in rewardsCatalog" :key="reward.id">
                             <div :class="getCardClass()" class="p-6 border-4 rounded-xl flex flex-col justify-between space-y-5 relative shadow-xl">
                                 <div class="absolute top-4 right-4 bg-amber-400 text-amber-950 font-retro px-3 py-1 rounded text-xs font-bold shadow flex items-center gap-1">
-                                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-3.5 h-3.5 object-contain">
-                                    <span x-text="reward.cost + ' Token(s)'"></span>
+                                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-3.5 h-3.5 object-contain" alt="">
+                                    <span x-text="reward.cost + (reward.cost === 1 ? ' ficha' : ' fichas')"></span>
                                 </div>
                                 <div class="space-y-3">
                                     <div class="text-4xl mb-2" x-text="reward.icon"></div>
@@ -1220,13 +1328,13 @@
                             <div class="bg-amber-50 text-slate-900 p-8 md:p-12 rounded-2xl border-8 border-amber-600 shadow-2xl font-mono space-y-8 text-center relative overflow-hidden">
                                 <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl font-retro text-amber-900">⭐</div>
                                 <h2 class="font-retro text-xl md:text-2xl text-amber-900">🏆 SALÓN DE LA FAMA - DIPLOMA MAESTRO KANTO</h2>
-                                <p class="text-base">Se otorga el presente diploma al Entrenador/a <b class="text-emerald-800 text-xl" x-text="currentStudent.name"></b> por conquistar los 8 gimnasios de Kanto.</p>
+                                <p class="text-base">¡Enhorabuena! Este diploma es para <b class="text-emerald-800 text-xl" x-text="currentStudent.name"></b>, que ha conquistado los 8 gimnasios de Kanto.</p>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-amber-100/80 p-8 rounded-xl border-2 border-amber-400 text-xs md:text-sm text-left">
                                     <div class="space-y-3">
                                         <h4 class="font-retro text-amber-900 text-xs mb-3">📊 Datos del Entrenador:</h4>
                                         <p>• Escuela / Colegio: <b x-text="currentStudent.school || 'Colegio Kanto'"></b></p>
-                                        <p>• Escuadrón / Clan: <b x-text="currentStudent.faction || 'Rayo'"></b></p>
+                                        <p>• Escuadrón: <b x-text="currentStudent.faction || 'Rayo'"></b></p>
                                         <p>• Medallas: <b x-text="earnedBadgesCount + ' / 8'"></b></p>
                                     </div>
                                     <div class="space-y-3">
@@ -1248,8 +1356,8 @@
                         <template x-if="earnedBadgesCount < 8">
                             <div class="bg-slate-900 p-12 text-center space-y-5 border-4 border-amber-500/50 rounded-xl font-mono">
                                 <div class="text-6xl animate-bounce">🔒</div>
-                                <h4 class="font-retro text-sm md:text-base text-amber-300">Hall de la Fama Bloqueado (<span x-text="earnedBadgesCount"></span>/8 Medallas)</h4>
-                                <p class="text-xs md:text-sm text-slate-300">Completa los 8 gimnasios para desbloquear tu Diploma Maestro y ver tu ficha completa representativa.</p>
+                                <h4 class="font-retro text-sm md:text-base text-amber-300">Salón de la Fama bloqueado (<span x-text="earnedBadgesCount"></span>/8 Medallas)</h4>
+                                <p class="text-xs md:text-sm text-slate-300">¡Consigue las 8 medallas para desbloquear tu diploma!</p>
                             </div>
                         </template>
                     </div>
@@ -1676,19 +1784,19 @@ function spin(el,o){ // tragaperras de 3 rodillos: {items:[{name,img,shiny}], wi
 /* ---------- cofre completo (sin depender de Alpine: se crea aquí el aviso, la tragaperras y el premio) ---------- */
 function chest(o){ // {titulo, sub, head, text, items, win, tick, onEnd, onClose}
   injectCss();
-  const ov=document.createElement('div');ov.className='km-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','Tu cofre');
+  const ov=document.createElement('div');ov.className='km-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-labelledby','km-t');const prev=document.activeElement;
   const card=document.createElement('div');card.className='km-card';ov.appendChild(card);
   const wrap=document.createElement('div');wrap.className='km-wrap';card.appendChild(wrap);
   const x=document.createElement('button');x.className='km-x';x.textContent='✕';x.setAttribute('aria-label','Cerrar');wrap.appendChild(x);
-  const h=document.createElement('h2');h.textContent=o.titulo||'¡Tienes un cofre!';wrap.appendChild(h);
+  const h=document.createElement('h2');h.id='km-t';h.textContent=o.titulo||'¡Tienes un cofre!';wrap.appendChild(h);
   const sub=document.createElement('p');sub.textContent=o.sub||'';wrap.appendChild(sub);
   const caja=document.createElement('div');caja.className='km-cofre';caja.textContent='🎁';caja.setAttribute('aria-hidden','true');wrap.appendChild(caja);
   const zona=document.createElement('div');zona.style.width='100%';wrap.appendChild(zona);
-  const prize=document.createElement('div');prize.className='km-prize';prize.hidden=true;wrap.appendChild(prize);
+  const prize=document.createElement('div');prize.className='km-prize';prize.hidden=true;prize.setAttribute('role','status');wrap.appendChild(prize);
   const btn=document.createElement('button');btn.className='km-btn';btn.textContent='🎰 ABRIR COFRE';wrap.appendChild(btn);
   let skip=null,abierto=false,cerrado=false;
-  const cerrar=()=>{if(cerrado)return;cerrado=true;document.removeEventListener('keydown',esc);ov.remove();if(o.onClose)o.onClose()};
-  const esc=e=>{if(e.key==='Escape')cerrar()};
+  const cerrar=()=>{if(cerrado)return;cerrado=true;document.removeEventListener('keydown',esc);ov.remove();if(prev&&prev.isConnected)prev.focus();if(o.onClose)o.onClose()};
+  const esc=e=>{if(e.key==='Escape')cerrar();else if(e.key==='Tab'){e.preventDefault();(document.activeElement===btn?x:btn).focus()}};
   document.addEventListener('keydown',esc);
   x.onclick=cerrar;
   const premio=()=>{
@@ -1825,7 +1933,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     { id: 'r7', title: 'Capitán de Equipo', cost: 3, icon: '⭐', desc: 'Liderar grupos en los torneos.' },
                     { id: 'r8', title: 'Elegir Juego del Viernes', cost: 3, icon: '🎮', desc: 'Proponer el juego final.' },
                     { id: 'r9', title: 'Corona de Entrenador', cost: 3, icon: '👑', desc: 'Llevar corona en clase.' },
-                    { id: 'r10', title: 'Inmunidad de Recogida', cost: 4, icon: '🛡️', desc: 'Exonerado de recoger material.' }
+                    { id: 'r10', title: 'Inmunidad de Recogida', cost: 4, icon: '🛡️', desc: 'Te libras de recoger el material.' }
                 ],
 
                 gyms: [
@@ -2239,12 +2347,16 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 get filteredPokedex() {
                     let list = this.pokedexList;
                     if(this.pokeFilter === 'owned') list = list.filter(p => this.isOwned(p.name));
+                    if(this.pokeFilter === 'missing') list = list.filter(p => !this.isOwned(p.name));
                     if(this.pokeSearch.trim() !== '') {
                         const q = this.pokeSearch.toLowerCase();
                         list = list.filter(p => p.name.toLowerCase().includes(q) || p.id.includes(q) || p.type.toLowerCase().includes(q));
                     }
                     return list;
                 },
+                get ownedCount() { return (this.currentStudent.ownedPokemon || []).length; },
+                legendNames: ['Articuno', 'Zapdos', 'Moltres', 'Dragonite', 'Mewtwo', 'Mew'],
+                isLegend(pokeName) { return this.legendNames.includes(pokeName); },
                 isOwned(pokeName) {
                     return this.currentStudent.ownedPokemon && this.currentStudent.ownedPokemon.includes(pokeName);
                 },
@@ -2377,7 +2489,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     }
                 },
                 recruitPokemon(poke) {
-                    if (this.currentStudent.tokens >= poke.cost && !this.isOwned(poke.name)) {
+                    if (this.currentStudent.tokens >= poke.cost && !this.isOwned(poke.name) && !this.isLegend(poke.name)) {
                         this.currentStudent.tokens -= poke.cost;
                         if (!this.currentStudent.ownedPokemon) this.currentStudent.ownedPokemon = ['Pikachu'];
                         this.currentStudent.ownedPokemon.push(poke.name);
@@ -2520,6 +2632,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                         this.token = data.token;
                         this.currentRole = 'teacher';
                         this.teacherTab = 'class';
+                        this.rotomMessage = '"¡Bzzzt! ¡Hola, profe! ' + this.rotomTips[Math.floor(Math.random() * this.rotomTips.length)] + '"';
                         this.teacherPasswordInput = '';
                         this.teacherErrorMsg = '';
                         await this.loadProfiles();
@@ -2556,7 +2669,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (this.currentStudent !== c || !this.token) return;
                     const body = { theme: c.theme, ownedPokemon: c.ownedPokemon, activeTeam: c.activeTeam, redeemedRewards: c.redeemedRewards, dailyQuestStatus: c.dailyQuestStatus, achievements: c.achievements, shinyPokemon: c.shinyPokemon };
                     if (clearNotices) body.pendingNotifications = [];
-                    const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked'];
+                    const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked', 'streak'];
                     try {
                         const d = await this.api('/me', 'PUT', body);
                         if (d.profile && this.currentStudent === c && my === this._saveN) for (const k of KEYS) if (d.profile[k] !== undefined) c[k] = d.profile[k];
@@ -2595,7 +2708,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     else this.$nextTick(() => this.openMyChest());
 
                     const randomTip = this.rotomTips[Math.floor(Math.random() * this.rotomTips.length)];
-                    this.rotomMessage = `"¡Bzzzt! Bienvenido, ${this.currentStudent.name}. ${randomTip} ¡Tu escuadrón ${this.currentStudent.faction} cuenta contigo!"`;
+                    this.rotomMessage = `"¡Bzzzt! ¡Hola, ${this.currentStudent.name}! ${randomTip} ¡Tu escuadrón ${this.currentStudent.faction} cuenta contigo!"`;
                     this.station = 'base';
                 },
                 showNextLoginNotification() {
@@ -2675,7 +2788,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (ch.kind === 'legend') {
                         head = '¡' + ch.name + ' shiny!';
                         text = 'Tu escuadrón ganó ' + city + '. ' + ch.name + ' brillante ya está en tu Pokédex. Cada legendario se entrega una sola vez en toda la liga: ningún otro escuadrón lo recibirá.';
-                        items = ['Articuno', 'Zapdos', 'Moltres', 'Dragonite', 'Mewtwo', 'Mew']
+                        items = this.legendNames
                             .map(n => ({ name: n, img: this.legendSprite(n), shiny: true })).filter(i => i.img);
                         win = items.findIndex(i => i.name === ch.name);
                     } else if (ch.kind === 'consolation') {
@@ -3306,7 +3419,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                                     <div class="bg-slate-900 p-5 rounded-xl border-2 border-amber-500/80 space-y-3">
                                         <div class="flex items-center gap-3 text-amber-300 font-retro text-xs">
                                             <i class="fa-solid fa-key"></i>
-                                            <span>CÓDIGO SECRETO (RECUPERACIÓN MAESTRO):</span>
+                                            <span>CÓDIGO SECRETO (RECUPERACIÓN):</span>
                                         </div>
                                         <div class="flex gap-3 items-center flex-wrap">
                                             <button @click="playSound('token'); teacherResetCode(student)" class="px-5 py-3 bg-emerald-600 text-white font-retro text-sm rounded-xl hover:bg-emerald-500 font-bold">🎲 Código nuevo de emojis</button>

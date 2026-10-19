@@ -60,7 +60,7 @@ El panel del profesor tiene cuatro pestañas, ordenadas por uso:
 - **🖥️ Pizarra**: ver más abajo. **La lista de clase también está aquí** (solo en tu pantalla; al pulsar Presentar desaparece del proyector), con los mismos modos, y los sorteos y equipos solo cuentan con los alumnos que no faltan hoy.
 - **👥 Alumnos**: directorio con búsqueda, filtro por escuadrón y orden (nombre, fichas, progreso, faltas). Cada fila resume fichas, medallas, misiones y faltas; al abrirla editas al alumno (datos físicos, nota, código nuevo, borrar).
 - **⚙️ Gestión**: semana y plan de la sesión, cerrar unidad (cofres), tarjetas de código para toda la clase, exportar **📊 Progreso (CSV)** y **📋 Asistencia (CSV)** (una fila por alumno y una columna por día, ✅ por defecto en los días con lista cerrada) y ayuda rápida de atajos.
-- La asistencia es **solo del profesor**: el alumno no la ve y no puede modificarla.
+- La asistencia es **solo del profesor**: el alumno no ve sus faltas ni las fechas y no puede modificarla. Solo ve su **🔥 racha** en Mi Base («Llevas 4 clases seguidas participando»): cuenta las listas pasadas seguidas sin falta (el retraso cuenta como venir) y vuelve a 0 si falta.
 - **🖥️ Modo pizarra** (pestaña propia). Pensado para usar **dos dispositivos**: en el ordenador del proyector abres la pestaña y pulsas **📽️ Presentar** (pantalla completa, sin botones, la pantalla no se apaga); desde tu tablet o móvil abres la misma pestaña y lo manejas todo. Los cambios llegan al proyector en unos 4 segundos. Incluye:
   - **Misión de hoy y fases** (🔥 calentamiento, 🎯 parte principal, 🧘 vuelta a la calma) con el texto y el material de cada fase. Escribes el plan de cada sesión en **✏️ Plan de la sesión**; si no hay plan, muestra textos por defecto.
   - **Cronómetro y temporizador**: cuenta atrás (3, 5, 10 min o a medida), cronómetro y circuitos trabajo/descanso (30/15 ×6, tabata 20/10 ×8 o a medida) con colores verde/rojo y pitidos (se activan al presentar; botón 🔔 para silenciar).
@@ -126,3 +126,8 @@ Una fila por alumno con tres botones grandes ✅ presente / ⏰ tarde / ❌ falt
   - El alumno ve el aviso **🎰 Abrir mi cofre** en Mi Base siempre que tenga cofres sin abrir, además de la apertura automática al entrar.
 - **El brillo shiny solo se consigue con cofres.** Los alumnos que ya lo tenían activado lo conservan.
 - Si cambias el listado de Pokémon o sus precios en `index.html`, actualiza `POKE_COST` en `netlify/functions/api.mjs` (y `LEGENDS` / `CONSOLATION`).
+
+## Pokédex como álbum de cromos (v10)
+- La Colección es un álbum: los Pokémon que tienes salen a color (con ✓); los que te faltan, en silueta gris con su precio y el botón Reclutar (o «Te faltan N» si no llegan las fichas).
+- Filtros Todos / Mis cromos / Me faltan y contador «Tu álbum: N de 151 cromos».
+- Los 6 legendarios (Articuno, Zapdos, Moltres, Dragonite, Mewtwo, Mew) ya **no se pueden comprar**: salen como «Legendario sorpresa» y solo llegan en cofres. El servidor rechaza su compra; quien ya tenía alguno lo conserva.

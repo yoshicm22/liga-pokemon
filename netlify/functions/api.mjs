@@ -142,8 +142,20 @@ const clearAttempts = (key) => store.delete(rlKey(key));
 
 /* ---------- datos ---------- */
 const teacherView = (p) => { const { passHash, ...rest } = p; return rest; };
-const studentView = (p) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return rest; };
-const getAttClosed = async () => (await store.get("meta/att-closed", { type: "json" })) || [];
+// racha: listas pasadas seguidas, de la más reciente hacia atrás, sin falta (el retraso cuenta como venir). Al alumno solo le llega el número, nunca las fechas
+const streakOf = (p, closed) => {
+  const day = (t) => new Date(t).toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }); // mismo formato que las fechas del profe
+  const from = day(Number.isFinite(p.createdAt) ? p.createdAt : 0), today = day(Date.now());
+  const att = isObj(p.att) ? p.att : {};
+  // cuentan las listas pasadas; una falta ya puesta corta aunque la lista no llegara a cerrarse (pero no una de un día futuro)
+  const ds = [...new Set([...closed, ...Object.keys(att).filter((d) => att[d] === "F" && d <= today)])].filter((d) => d >= from).sort().reverse();
+  let n = 0;
+  for (const d of ds) { if (att[d] === "F") break; n++; }
+  return n;
+};
+const studentView = (p, closed = []) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return { ...rest, streak: streakOf(p, closed) }; };
+// si falla la lectura, la racha sale a 0 en vez de tumbar el login
+const getAttClosed = async () => { try { const v = await store.get("meta/att-closed", { type: "json" }); return Array.isArray(v) ? v : []; } catch { return []; } };
 const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) && (() => { const x = new Date(d + "T00:00:00Z"); return !Number.isNaN(x.getTime()) && x.toISOString().startsWith(d); })();
 const shortName = (n) => {
   const parts = String(n).trim().split(" ").filter(Boolean);
@@ -359,7 +371,7 @@ export default async (req, context) => {
       };
       await putStudent(profile);
       const token = await sign({ role: "student", sid: profile.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(profile) }, 201);
+      return json({ token, profile: studentView(profile, await getAttClosed()) }, 201);
     }
 
     if (method === "POST" && path === "/login") {
@@ -376,7 +388,7 @@ export default async (req, context) => {
       if (!checkPw(b.password ?? "", s.passHash)) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!");
       await clearAttempts(`login:${id}`);
       const token = await sign({ role: "student", sid: s.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(s) });
+      return json({ token, profile: studentView(s, await getAttClosed()) });
     }
 
     if (method === "POST" && path === "/teacher/login") {
@@ -398,7 +410,7 @@ export default async (req, context) => {
     if (session.role === "student") {
       if (path === "/me" && method === "GET") {
         const s = await getStudent(session.sid);
-        return s ? json({ profile: studentView(s) }) : fail(404, "Perfil no encontrado.");
+        return s ? json({ profile: studentView(s, await getAttClosed()) }) : fail(404, "Perfil no encontrado.");
       }
       if (path === "/me" && method === "PUT") {
         const b = await readBody(req);
@@ -415,7 +427,8 @@ export default async (req, context) => {
           }
           if (strs(ownedPokemon)) {
             const { added, removed } = multisetDiff(s.ownedPokemon || ["Pikachu"], ownedPokemon);
-            const cost = added.reduce((a, x) => a + (isPoke(x) ? POKE_COST[x] : 1e9), 0);
+            // los legendarios solo salen de un cofre: no se pueden comprar
+            const cost = added.reduce((a, x) => a + (isPoke(x) && !LEGENDS.includes(x) ? POKE_COST[x] : 1e9), 0);
             if (!removed && new Set(ownedPokemon).size === ownedPokemon.length && cost <= tokens) { s.ownedPokemon = ownedPokemon; tokens -= cost; }
           }
           s.tokens = tokens;
@@ -429,7 +442,7 @@ export default async (req, context) => {
           // el alumno solo puede vaciar sus avisos (ya vistos)
           if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length === 0) s.pendingNotifications = [];
         });
-        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: studentView(out, await getAttClosed()) });
       }
       if (path === "/me/chest-seen" && method === "POST") {
         const b = await readBody(req);
@@ -438,7 +451,7 @@ export default async (req, context) => {
           // con dos dispositivos abiertos, cada uno cierra su propio cofre y no el del otro
           s.pendingChests = q.length && (b.g === undefined || q[0].g === b.g) ? q.slice(1) : q;
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
       }
       if (path === "/me/choose" && method === "POST") {
         const b = await readBody(req);
@@ -452,7 +465,7 @@ export default async (req, context) => {
           s.pendingChoice = pc.slice(1);
           pushNotice(s, { title: "¡Pokémon shiny conseguido!", desc: name + " brillante ya es tuyo.", icon: "✨" });
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
       }
       return fail(403, "No permitido.");
     }
