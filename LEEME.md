@@ -86,7 +86,7 @@ El panel del profesor tiene cuatro pestañas, ordenadas por uso:
 - El temporizador, el semáforo, los medidores y los sorteos se guardan en el servidor y se comparten entre dispositivos; los pitidos suenan solo en el dispositivo donde estén activados.
 - El panel de edición de un alumno guarda los valores que tenía cargados: si lo dejas abierto mucho rato, pulsa Actualizar antes de guardar. Para el día a día usa Clase o Pizarra, que no tienen ese problema.
 - Los Pokémon que compra un alumno se comprueban en su navegador; un alumno muy técnico podría añadirse alguno sin pagar.
-- **Tailwind sigue cargándose desde su CDN** (no he podido compilarlo en local sin conexión). El modo instalable lo cachea tras la primera carga, pero la primera visita con wifi lenta puede tardar.
+- **Tailwind ya va compilado dentro del HTML** (v11). Si cambias clases en `public/index.html` o `demo-v9.html`, ejecuta `npm install` una vez y luego `npm run css` para regenerarlo.
 - Los Pokémon son marcas registradas: para uso interno en clase suele tolerarse; no la publiques abierta a todo internet sin pensarlo.
 
 
@@ -131,3 +131,11 @@ Una fila por alumno con tres botones grandes ✅ presente / ⏰ tarde / ❌ falt
 - La Colección es un álbum: los Pokémon que tienes salen a color (con ✓); los que te faltan, en silueta gris con su precio y el botón Reclutar (o «Te faltan N» si no llegan las fichas).
 - Filtros Todos / Mis cromos / Me faltan y contador «Tu álbum: N de 151 cromos».
 - Los 6 legendarios (Articuno, Zapdos, Moltres, Dragonite, Mewtwo, Mew) ya **no se pueden comprar**: salen como «Legendario sorpresa» y solo llegan en cofres. El servidor rechaza su compra; quien ya tenía alguno lo conserva.
+
+## Acabado profesional (v11)
+- Iconos SVG propios en lugar de FontAwesome (que en la demo no cargaba y dejaba huecos) y de los emojis de botones, pestañas y cabecera. Favicon de Poké Ball y título corto.
+- En el móvil del alumno, las 4 estaciones van en una barra fija abajo, como una app; el aviso de Rotom solo sale en Mi Base.
+- Entrada de alumnos: tarjetas que caben en el móvil y el código de 3 emojis en una ventana propia, con el teclado en 4 columnas.
+- Accesibilidad: tarjetas pulsables con teclado, etiquetas en los campos, nombre en cada emoji y en los botones de cerrar, avisos de error leídos por el lector.
+- Rendimiento: Tailwind compilado (sin compilar en el navegador), brillos shiny fijos en vez de animados, Rotom y las siluetas del álbum con sprites pequeños (unos 2 KB en vez de ~100 KB cada uno).
+
