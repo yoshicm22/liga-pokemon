@@ -32,7 +32,7 @@ const cl=o=>JSON.parse(JSON.stringify(o));
 const R=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{'content-type':'application/json'}});
 const E=(m,s)=>R({error:m},s);
 const short=n=>{const p=n.trim().split(' ').filter(Boolean);return p.length>1?p[0]+' '+[...p[1]][0].toUpperCase()+'.':p[0];};
-const sv=s=>{const c=cl(s);['weight','height','wingspan','hrRest','note','att'].forEach(k=>delete c[k]);const a=s.att||{};let n=0;for(const d of [...db.closed].sort().reverse()){if(a[d]==='F')break;n++;}c.streak=n;return c;};
+const sv=s=>{const c=cl(s);['weight','height','wingspan','hrRest','note','att'].forEach(k=>delete c[k]);const a=s.att||{};let n=0;const t=new Date().toLocaleDateString('sv-SE'),f=s.createdAt?new Date(s.createdAt).toLocaleDateString('sv-SE'):'';for(const d of [...new Set([...db.closed,...Object.keys(a).filter(d=>a[d]==='F'&&d<=t)])].filter(d=>d>=f).sort().reverse()){if(a[d]==='F')break;n++;}c.streak=n;return c;};
 const tot=()=>{const t={Rayo:0,Cascada:0,Roca:0};db.s.forEach(s=>s.gymSessionsData.forEach(r=>t[s.faction]+=r.filter(Boolean).length));return t;};
 const get=id=>db.s.find(s=>s.id===id);
 const note=(s,n)=>{s.pendingNotifications=[...s.pendingNotifications,n].slice(-50);};
@@ -43,7 +43,7 @@ window.fetch=async(url,o={})=>{
  const p=String(url).slice(4),m=(o.method||'GET').toUpperCase(),b=o.body?JSON.parse(o.body):{};let x;
  if(m==='GET'&&p==='/public')return R({students:db.s.map(s=>({id:s.id,name:short(s.name),school:s.school,gender:s.gender,faction:s.faction,badges:s.badges})),config:db.cfg,factionTotals:tot(),requiresCode:true});
  if(m==='POST'&&p==='/login'){const s=get(b.id);if(!s)return E('No encontrado',404);me=s.id;return R({token:'demo',profile:sv(s)});}
- if(m==='POST'&&p==='/register'){const s={id:'demo_'+Date.now(),name:b.name,school:b.school||'Colegio Kanto',gender:b.gender==='girl'?'girl':'boy',faction:b.faction||'Rayo',tokens:0,weight:'',height:'',wingspan:'',hrRest:'',note:'',theme:'emerald',gymSessionsData:[],badges:[],ownedPokemon:['Pikachu'],activeTeam:['Pikachu',null,null,null,null,null],redeemedRewards:[],usedRewards:[],dailyQuestStatus:{},achievements:{},shinyPokemon:[],pendingNotifications:[]};db.s.push(s);me=s.id;return R({token:'demo',profile:sv(s)},201);}
+ if(m==='POST'&&p==='/register'){const s={id:'demo_'+Date.now(),createdAt:Date.now(),name:b.name,school:b.school||'Colegio Kanto',gender:b.gender==='girl'?'girl':'boy',faction:b.faction||'Rayo',tokens:0,weight:'',height:'',wingspan:'',hrRest:'',note:'',theme:'emerald',gymSessionsData:[],badges:[],ownedPokemon:['Pikachu'],activeTeam:['Pikachu',null,null,null,null,null],redeemedRewards:[],usedRewards:[],dailyQuestStatus:{},achievements:{},shinyPokemon:[],pendingNotifications:[]};db.s.push(s);me=s.id;return R({token:'demo',profile:sv(s)},201);}
  if(m==='POST'&&p==='/teacher/login')return b.password==='demo'?R({token:'demo-t'}):E('Contraseña incorrecta (en la demo es: demo)',401);
  if(p==='/me'){const s=get(me);if(!s)return E('Sesión caducada',401);if(m==='GET')return R({profile:sv(s)});
   ['theme','dailyQuestStatus','achievements'].forEach(k=>{if(k in b)s[k]=b[k];});
@@ -2634,7 +2634,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (this.currentStudent !== c || !this.token) return;
                     const body = { theme: c.theme, ownedPokemon: c.ownedPokemon, activeTeam: c.activeTeam, redeemedRewards: c.redeemedRewards, dailyQuestStatus: c.dailyQuestStatus, achievements: c.achievements, shinyPokemon: c.shinyPokemon };
                     if (clearNotices) body.pendingNotifications = [];
-                    const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked'];
+                    const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked', 'streak'];
                     try {
                         const d = await this.api('/me', 'PUT', body);
                         if (d.profile && this.currentStudent === c && my === this._saveN) for (const k of KEYS) if (d.profile[k] !== undefined) c[k] = d.profile[k];

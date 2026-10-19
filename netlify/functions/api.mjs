@@ -144,10 +144,11 @@ const clearAttempts = (key) => store.delete(rlKey(key));
 const teacherView = (p) => { const { passHash, ...rest } = p; return rest; };
 // racha: listas pasadas seguidas, de la más reciente hacia atrás, sin falta (el retraso cuenta como venir). Al alumno solo le llega el número, nunca las fechas
 const streakOf = (p, closed) => {
-  const from = new Date(Number.isFinite(p.createdAt) ? p.createdAt : 0).toISOString().slice(0, 10);
+  const day = (t) => new Date(t).toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }); // mismo formato que las fechas del profe
+  const from = day(Number.isFinite(p.createdAt) ? p.createdAt : 0), today = day(Date.now());
   const att = isObj(p.att) ? p.att : {};
-  // solo listas pasadas (marcar a alguien ya da la lista por pasada)
-  const ds = closed.filter((d) => d >= from).sort().reverse();
+  // cuentan las listas pasadas; una falta ya puesta corta aunque la lista no llegara a cerrarse (pero no una de un día futuro)
+  const ds = [...new Set([...closed, ...Object.keys(att).filter((d) => att[d] === "F" && d <= today)])].filter((d) => d >= from).sort().reverse();
   let n = 0;
   for (const d of ds) { if (att[d] === "F") break; n++; }
   return n;
@@ -370,7 +371,7 @@ export default async (req, context) => {
       };
       await putStudent(profile);
       const token = await sign({ role: "student", sid: profile.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(profile) }, 201);
+      return json({ token, profile: studentView(profile, await getAttClosed()) }, 201);
     }
 
     if (method === "POST" && path === "/login") {

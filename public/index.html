@@ -2568,7 +2568,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (this.currentStudent !== c || !this.token) return;
                     const body = { theme: c.theme, ownedPokemon: c.ownedPokemon, activeTeam: c.activeTeam, redeemedRewards: c.redeemedRewards, dailyQuestStatus: c.dailyQuestStatus, achievements: c.achievements, shinyPokemon: c.shinyPokemon };
                     if (clearNotices) body.pendingNotifications = [];
-                    const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked'];
+                    const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked', 'streak'];
                     try {
                         const d = await this.api('/me', 'PUT', body);
                         if (d.profile && this.currentStudent === c && my === this._saveN) for (const k of KEYS) if (d.profile[k] !== undefined) c[k] = d.profile[k];
