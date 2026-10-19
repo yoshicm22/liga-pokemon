@@ -1213,26 +1213,27 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                     </div>
 
                     <p class="font-retro text-xs text-amber-300" x-text="'📒 Tu álbum: ' + ownedCount + ' de 151 cromos'"></p>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-[600px] overflow-y-auto pr-2 text-sm">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-[600px] overflow-y-auto pr-2 pt-3 text-sm">
                         <template x-for="poke in filteredPokedex" :key="poke.id">
-                            <div class="rounded-xl border-4 p-3 flex flex-col items-center text-center gap-2" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'bg-amber-950 border-amber-300' : 'bg-slate-950 border-amber-400') : (isLegend(poke.name) ? 'bg-indigo-950 border-indigo-400 border-dashed' : 'bg-slate-950 border-slate-700 border-dashed')">
-                                <span class="self-start text-xs font-retro" :class="isOwned(poke.name) ? 'text-amber-400' : 'text-slate-400'" x-text="'Nº ' + poke.id"></span>
-                                <div class="relative w-20 h-20 flex items-center justify-center">
-                                    <img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : '') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" :alt="isOwned(poke.name) ? poke.name : 'Pokémon que aún no tienes'">
-                                    <template x-if="!isOwned(poke.name) && isLegend(poke.name)"><span class="absolute font-retro text-2xl text-indigo-100" aria-hidden="true">?</span></template>
+                            <div class="relative rounded-2xl border-4 p-3 flex flex-col items-center text-center gap-2 transition-transform" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'bg-gradient-to-b from-amber-800 via-amber-900 to-amber-950 border-amber-200 shadow-[0_0_18px_rgba(251,191,36,.7)] ring-2 ring-amber-400/60' : 'bg-gradient-to-b from-slate-700 to-slate-950 border-amber-400 shadow-lg shadow-amber-500/30') : (isLegend(poke.name) ? 'bg-gradient-to-b from-purple-950 via-indigo-950 to-slate-950 border-indigo-400 border-dashed shadow-[0_0_14px_rgba(129,140,248,.45)]' : 'bg-slate-900 border-slate-600 border-dashed')">
+                                <span x-show="isOwned(poke.name) && isShiny(poke.name)" class="absolute -top-2 -right-1 text-xl motion-safe:animate-pulse" aria-hidden="true">✨</span>
+                                <span class="self-start text-xs font-retro rounded px-1.5 py-0.5" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'" x-text="'Nº ' + poke.id"></span>
+                                <div class="relative w-24 h-24 flex items-center justify-center rounded-full" :class="isOwned(poke.name) ? 'bg-sky-200/20 ring-2 ring-amber-300/70' : (isLegend(poke.name) ? 'bg-indigo-900/60 ring-2 ring-indigo-400/50' : 'bg-slate-800')">
+                                    <img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" :alt="isOwned(poke.name) ? poke.name : 'Pokémon que aún no tienes'">
+                                    <template x-if="!isOwned(poke.name) && isLegend(poke.name)"><span class="absolute font-retro text-3xl text-indigo-100 motion-safe:animate-pulse" aria-hidden="true">?</span></template>
                                 </div>
-                                <h4 class="font-retro text-xs" :class="isOwned(poke.name) ? 'text-slate-100' : 'text-slate-400'" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
+                                <h4 class="font-retro text-sm" :class="isOwned(poke.name) ? 'text-white' : (isLegend(poke.name) ? 'text-indigo-200' : 'text-slate-300')" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
                                 <template x-if="isOwned(poke.name)">
                                     <div class="w-full space-y-2">
                                         <span class="text-xs text-amber-300 block" x-text="poke.type + (isShiny(poke.name) ? ' • ✨ Shiny' : '')"></span>
-                                        <button @click="speakText(poke.efDesc)" class="w-full py-2 text-xs rounded-lg bg-slate-800 text-amber-300" :aria-label="'Escuchar qué entrena ' + poke.name">🔊 ¿Qué entrena?</button>
+                                        <button @click="speakText(poke.efDesc)" class="w-full min-h-[44px] py-2 text-xs rounded-lg bg-slate-800 text-amber-300" :aria-label="'Escuchar qué entrena ' + poke.name">🔊 ¿Qué entrena?</button>
                                         <template x-if="canShiny(poke.name)">
-                                            <button @click="toggleShiny(poke.name)" class="w-full py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
+                                            <button @click="toggleShiny(poke.name)" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
                                         </template>
                                     </div>
                                 </template>
                                 <template x-if="!isOwned(poke.name) && isLegend(poke.name)">
-                                    <p class="text-xs text-indigo-200 font-bold">🎁 ¡Sorpresa! Solo sale en los cofres</p>
+                                    <p class="text-xs text-indigo-100 font-bold rounded-lg bg-indigo-900/70 px-2 py-1">🎁 ¡Sorpresa! Solo sale en los cofres</p>
                                 </template>
                                 <template x-if="!isOwned(poke.name) && !isLegend(poke.name)">
                                     <div class="w-full space-y-2">
@@ -1240,7 +1241,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                                             <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
                                             <span x-text="poke.cost + (poke.cost > 1 ? ' fichas' : ' ficha')"></span>
                                         </p>
-                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" class="w-full py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-400 border-slate-700'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
+                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-400 border-slate-700'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
                                     </div>
                                 </template>
                             </div>
