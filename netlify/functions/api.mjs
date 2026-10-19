@@ -415,7 +415,8 @@ export default async (req, context) => {
           }
           if (strs(ownedPokemon)) {
             const { added, removed } = multisetDiff(s.ownedPokemon || ["Pikachu"], ownedPokemon);
-            const cost = added.reduce((a, x) => a + (isPoke(x) ? POKE_COST[x] : 1e9), 0);
+            // los legendarios solo salen de un cofre: no se pueden comprar
+            const cost = added.reduce((a, x) => a + (isPoke(x) && !LEGENDS.includes(x) ? POKE_COST[x] : 1e9), 0);
             if (!removed && new Set(ownedPokemon).size === ownedPokemon.length && cost <= tokens) { s.ownedPokemon = ownedPokemon; tokens -= cost; }
           }
           s.tokens = tokens;
