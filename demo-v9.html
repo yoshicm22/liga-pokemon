@@ -49,11 +49,11 @@ window.fetch=async(url,o={})=>{
   ['theme','dailyQuestStatus','achievements'].forEach(k=>{if(k in b)s[k]=b[k];});
   const PC={"Farfetch'd": 2, "Bulbasaur": 2, "Ivysaur": 3, "Venusaur": 4, "Charmander": 2, "Charmeleon": 3, "Charizard": 4, "Squirtle": 2, "Wartortle": 3, "Blastoise": 4, "Caterpie": 1, "Metapod": 1, "Butterfree": 2, "Weedle": 1, "Kakuna": 1, "Beedrill": 3, "Pidgey": 1, "Pidgeotto": 2, "Pidgeot": 3, "Rattata": 1, "Raticate": 2, "Spearow": 1, "Fearow": 3, "Ekans": 1, "Arbok": 3, "Pikachu": 2, "Raichu": 3, "Sandshrew": 2, "Sandslash": 3, "Nidoran♀": 2, "Nidorina": 3, "Nidoqueen": 4, "Nidoran♂": 2, "Nidorino": 3, "Nidoking": 4, "Clefairy": 2, "Clefable": 3, "Vulpix": 2, "Ninetales": 4, "Jigglypuff": 2, "Wigglytuff": 3, "Zubat": 1, "Golbat": 3, "Oddish": 1, "Gloom": 2, "Vileplume": 4, "Paras": 1, "Parasect": 3, "Venonat": 1, "Venomoth": 3, "Diglett": 1, "Dugtrio": 3, "Meowth": 2, "Persian": 3, "Psyduck": 2, "Golduck": 3, "Mankey": 2, "Primeape": 3, "Growlithe": 2, "Arcanine": 4, "Poliwag": 1, "Poliwhirl": 2, "Poliwrath": 4, "Abra": 2, "Kadabra": 3, "Alakazam": 4, "Machop": 2, "Machoke": 3, "Machamp": 4, "Bellsprout": 1, "Weepinbell": 2, "Victreebel": 3, "Tentacool": 1, "Tentacruel": 3, "Geodude": 1, "Graveler": 2, "Golem": 4, "Ponyta": 2, "Rapidash": 3, "Slowpoke": 1, "Slowbro": 3, "Magnemite": 1, "Magneton": 3, "Doduo": 1, "Dodrio": 3, "Seel": 1, "Dewgong": 3, "Grimer": 1, "Muk": 3, "Shellder": 1, "Cloyster": 3, "Gastly": 1, "Haunter": 2, "Gengar": 4, "Onix": 3, "Drowzee": 1, "Hypno": 3, "Krabby": 1, "Kingler": 3, "Voltorb": 1, "Electrode": 2, "Exeggcute": 1, "Exeggutor": 3, "Cubone": 2, "Marowak": 3, "Hitmonlee": 3, "Hitmonchan": 3, "Lickitung": 2, "Koffing": 1, "Weezing": 3, "Rhyhorn": 2, "Rhydon": 4, "Chansey": 3, "Tangela": 2, "Kangaskhan": 4, "Horsea": 1, "Seadra": 2, "Goldeen": 1, "Seaking": 3, "Staryu": 2, "Starmie": 3, "Mr. Mime": 3, "Scyther": 3, "Jynx": 3, "Electabuzz": 3, "Magmar": 3, "Pinsir": 3, "Tauros": 3, "Magikarp": 1, "Gyarados": 4, "Lapras": 4, "Ditto": 3, "Eevee": 2, "Vaporeon": 4, "Jolteon": 4, "Flareon": 4, "Porygon": 3, "Omanyte": 2, "Omastar": 3, "Kabuto": 2, "Kabutops": 3, "Aerodactyl": 4, "Snorlax": 4, "Articuno": 5, "Zapdos": 5, "Moltres": 5, "Dratini": 2, "Dragonair": 3, "Dragonite": 5, "Mewtwo": 6, "Mew": 6},RC={"Encargado de Material": 1, "Líder de la Fila": 1, "DJ del Calentamiento": 2, "Árbitro Asistente": 2, "Elegir Compañero/a": 2, "Cronometrador Oficial": 2, "Capitán de Equipo": 3, "Elegir Juego del Viernes": 3, "Corona de Entrenador": 3, "Inmunidad de Recogida": 4};let tk=s.tokens;
   if(Array.isArray(b.redeemedRewards)&&b.redeemedRewards.length>s.redeemedRewards.length){const add=b.redeemedRewards.slice(s.redeemedRewards.length);const c=add.reduce((x,t)=>x+(RC[t]||1e9),0);if(c<=tk){tk-=c;s.redeemedRewards=b.redeemedRewards;}}
-  if(Array.isArray(b.ownedPokemon)&&b.ownedPokemon.length>s.ownedPokemon.length&&s.ownedPokemon.every(n=>b.ownedPokemon.includes(n))){const add=b.ownedPokemon.filter(n=>!s.ownedPokemon.includes(n));const c=add.reduce((x,t)=>x+(['Articuno','Zapdos','Moltres','Dragonite','Mewtwo','Mew'].includes(t)?1e9:(PC[t]||1e9)),0);if(c<=tk){tk-=c;s.ownedPokemon=b.ownedPokemon;}}
+  if(Array.isArray(b.ownedPokemon)&&b.ownedPokemon.length>s.ownedPokemon.length&&s.ownedPokemon.every(n=>b.ownedPokemon.includes(n))&&new Set(b.ownedPokemon).size===b.ownedPokemon.length){const add=b.ownedPokemon.filter(n=>!s.ownedPokemon.includes(n));const c=add.reduce((x,t)=>x+(['Articuno','Zapdos','Moltres','Dragonite','Mewtwo','Mew'].includes(t)?1e9:(PC[t]||1e9)),0);if(c<=tk){tk-=c;s.ownedPokemon=b.ownedPokemon;}}
   s.tokens=tk;if(Array.isArray(b.activeTeam)){const tn=b.activeTeam.filter(x=>x!==null);if(b.activeTeam.length===6&&b.activeTeam.every(x=>x===null||s.ownedPokemon.includes(x))&&new Set(tn).size===tn.length)s.activeTeam=b.activeTeam;}if(s.shinyUnlocked===undefined)s.shinyUnlocked=[...(s.shinyPokemon||[])];if(Array.isArray(b.shinyPokemon))s.shinyPokemon=b.shinyPokemon.filter(x=>s.ownedPokemon.includes(x)&&s.shinyUnlocked.includes(x));
   if(Array.isArray(b.pendingNotifications)&&!b.pendingNotifications.length)s.pendingNotifications=[];return R({ok:true,tokens:s.tokens,profile:sv(s)});}
  if(m==='POST'&&p==='/me/chest-seen'){const s=get(me);if(!s)return E('Sesión caducada',401);s.pendingChests=(s.pendingChests||[]).slice(1);return R({ok:true,profile:sv(s)});}
- if(m==='POST'&&p==='/me/choose'){const s=get(me);if(!s||!(s.pendingChoice||[]).length)return E('No tienes ninguna elección pendiente.',409);if(!s.ownedPokemon.includes(b.name)){s.ownedPokemon.push(b.name);const i=s.activeTeam.indexOf(null);if(i>=0)s.activeTeam[i]=b.name;}s.shinyUnlocked=[...new Set([...(s.shinyUnlocked||s.shinyPokemon||[]),b.name])];s.shinyPokemon=[...new Set([...(s.shinyPokemon||[]),b.name])];s.pendingChoice=s.pendingChoice.slice(1);return R({ok:true,profile:sv(s)});}
+ if(m==='POST'&&p==='/me/choose'){const s=get(me);if(!s||!(s.pendingChoice||[]).length)return E('No tienes ninguna elección pendiente.',409);if(!PC[b.name])return E('Pokémon no válido.',400);if(PC[b.name]>(s.pendingChoice[0].maxCost||4))return E('Ese Pokémon es demasiado fuerte para esta elección.',400);if(!s.ownedPokemon.includes(b.name)){s.ownedPokemon.push(b.name);const i=s.activeTeam.indexOf(null);if(i>=0)s.activeTeam[i]=b.name;}s.shinyUnlocked=[...new Set([...(s.shinyUnlocked||s.shinyPokemon||[]),b.name])];s.shinyPokemon=[...new Set([...(s.shinyPokemon||[]),b.name])];s.pendingChoice=s.pendingChoice.slice(1);return R({ok:true,profile:sv(s)});}
  if(m==='POST'&&p==='/teacher/unit-close'){const g=b.g;if(db.units.some(u=>u.g===g))return E('Esta unidad ya está cerrada.',409);const F=['Rayo','Cascada','Roca'];const sc=F.map(f=>{const ms=db.s.filter(x=>(x.faction||'Rayo')===f);return{f,n:ms.length,avg:ms.length?ms.reduce((a,x)=>a+((x.gymSessionsData[g]||[]).filter(Boolean).length),0)/ms.length:0};}).filter(q=>q.n);const top=Math.max(0,...sc.map(q=>q.avg));if(top<=0)return E('Nadie ha completado sesiones en esta unidad todavía.',400);const L=['Articuno','Zapdos','Moltres','Dragonite','Mewtwo','Mew'];const winners=sc.filter(q=>q.avg===top).map(q=>q.f);const prizes={};winners.forEach(f=>{const had=db.units.filter(u=>u.prizes[f]&&u.prizes[f].kind==='legend').map(u=>u.prizes[f].name);const used=db.units.flatMap(u=>Object.values(u.prizes||{}).filter(q=>q.kind==='legend').map(q=>q.name));const left=L.filter(n=>!used.includes(n));prizes[f]=left.length?{kind:'legend',name:left[Math.floor(Math.random()*left.length)]}:{kind:Math.random()<.5?'choose':'day'};});
   db.s.forEach(x=>{const f=x.faction||'Rayo';x.trophies=[...(x.trophies||[]),{g,kind:winners.includes(f)?'campeon':'sello'}];const pz=prizes[f];if(winners.includes(f)){if(pz.kind==='legend'){if(!x.ownedPokemon.includes(pz.name)){x.ownedPokemon.push(pz.name);const i=x.activeTeam.indexOf(null);if(i>=0)x.activeTeam[i]=pz.name;}x.shinyUnlocked=[...new Set([...(x.shinyUnlocked||x.shinyPokemon||[]),pz.name])];x.shinyPokemon=[...new Set([...(x.shinyPokemon||[]),pz.name])];x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'legend',name:pz.name}];note(x,{title:'¡COFRE DEL ESCUADRÓN!',desc:'Premio: '+pz.name+' en versión shiny.',icon:'🏆'});}else if(pz.kind==='choose'){x.pendingChoice=[...(x.pendingChoice||[]),{g,maxCost:4}];x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'choose'}];note(x,{title:'¡COFRE DEL ESCUADRÓN!',desc:'Elige tu Pokémon shiny en Mi Base.',icon:'🏆'});}else {x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'day'}];note(x,{title:'¡COFRE DEL ESCUADRÓN!',desc:'¡Día del escuadrón!',icon:'🏆'});}}else{const C=[['Ivysaur',3],['Charmeleon',3],['Wartortle',3],['Beedrill',2],['Pidgeot',3],['Fearow',3],['Arbok',3],['Pikachu',2]];const c=C[Math.floor(Math.random()*C.length)];const rep=x.ownedPokemon.includes(c[0]);if(!rep){x.ownedPokemon.push(c[0]);const i=x.activeTeam.indexOf(null);if(i>=0)x.activeTeam[i]=c[0];note(x,{title:'¡Gran unidad!',desc:'Premio de consolación: '+c[0]+'.',icon:'🎁'});}else{x.tokens+=c[1];note(x,{title:'¡Gran unidad!',desc:c[0]+' repetido, +'+c[1]+' fichas.',icon:'🎁'});}x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'consolation',name:c[0],tokens:rep?c[1]:0}];}});
   const rec={g,city:b.city,at:Date.now(),scores:{},winners,prizes,done:true};db.units.push(rec);db.board.chest={g,city:b.city,winners,prizes,at:Date.now()};return R({record:rec});}
@@ -237,12 +237,12 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
     <!-- SEQUENTIAL LOGIN NOTIFICATION MODAL -->
     <template x-if="activeLoginNotification">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-            <div class="bg-slate-900 max-w-lg w-full p-8 rounded-3xl border-8 border-amber-400 shadow-2xl space-y-6 text-center font-mono animate-badge relative">
+            <div role="dialog" aria-modal="true" aria-labelledby="ln-t" @keydown.escape.window="showNextLoginNotification()" class="bg-slate-900 max-w-lg w-full p-8 rounded-3xl border-8 border-amber-400 shadow-2xl space-y-6 text-center font-mono animate-badge relative">
                 <div class="text-6xl animate-bounce" x-text="activeLoginNotification.icon || '🎁'"></div>
                 <span class="text-amber-400 font-retro text-xs block mb-1">¡MENSAJE DEL PROFESOR!</span>
-                <h3 class="font-retro text-base text-amber-300" x-text="activeLoginNotification.title"></h3>
+                <h3 id="ln-t" class="font-retro text-base text-amber-300" x-text="activeLoginNotification.title"></h3>
                 <p class="text-slate-200 text-sm leading-relaxed" x-text="activeLoginNotification.desc"></p>
-                <button @click="showNextLoginNotification()" class="w-full py-4 bg-amber-400 text-amber-950 font-retro text-xs rounded-xl shadow-xl hover:bg-amber-300 font-bold">
+                <button x-init="$nextTick(() => $el.focus())" @click="showNextLoginNotification()" class="w-full py-4 bg-amber-400 text-amber-950 font-retro text-xs rounded-xl shadow-xl hover:bg-amber-300 font-bold">
                     🚀 ¡SIGUIENTE MENSAJE / CONTINUAR!
                 </button>
             </div>
@@ -275,7 +275,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
 
     <template x-if="showChooseModal">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" @keydown.escape.window="showChooseModal = false">
-            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto p-5 rounded-2xl border-4 border-amber-400 space-y-4" role="dialog" aria-label="Elegir Pokémon shiny">
+            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto p-5 rounded-2xl border-4 border-amber-400 space-y-4" role="dialog" aria-modal="true" aria-label="Elegir Pokémon shiny" x-init="$nextTick(() => $el.querySelector('button').focus())">
                 <div class="flex items-center justify-between gap-3">
                     <h3 class="text-xl font-bold text-amber-200">Elige tu Pokémon shiny</h3>
                     <button @click="showChooseModal = false" aria-label="Cerrar" class="w-12 h-12 rounded-lg bg-slate-800 text-slate-200 text-xl">✕</button>
@@ -1110,7 +1110,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                                 <div class="bg-black/40 p-3.5 rounded-xl border border-slate-700">
                                     <span class="text-slate-400 block text-xs mb-1">FICHAS</span>
                                     <span class="font-retro text-amber-400 text-sm md:text-base flex items-center justify-center gap-1">
-                                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain">
+                                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
                                         <strong x-text="currentStudent.tokens"></strong>
                                     </span>
                                 </div>
@@ -1332,16 +1332,16 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                                 <span x-show="isOwned(poke.name) && isShiny(poke.name)" class="absolute -top-2 -right-1 text-xl motion-safe:animate-pulse" aria-hidden="true">✨</span>
                                 <span class="self-start text-sm font-retro rounded px-1.5 py-0.5" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'"><span x-show="isOwned(poke.name)" aria-hidden="true">✓ </span><span x-text="'Nº ' + poke.id"></span></span>
                                 <div class="relative w-24 h-24 flex items-center justify-center rounded-full" :class="isOwned(poke.name) ? 'bg-sky-200/20 ring-2 ring-amber-300/70' : (isLegend(poke.name) ? 'bg-indigo-900/60 ring-2 ring-indigo-400/50' : 'bg-slate-800')">
-                                    <template x-if="isOwned(poke.name) || !isLegend(poke.name)"><img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" :alt="isOwned(poke.name) ? poke.name + (isShiny(poke.name) ? ', versión shiny' : '') : ''"></template>
+                                    <template x-if="isOwned(poke.name) || !isLegend(poke.name)"><img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" alt=""></template>
                                     <template x-if="!isOwned(poke.name) && isLegend(poke.name)"><span class="absolute font-retro text-3xl text-indigo-100 motion-safe:animate-pulse">?<span class="sr-only">Legendario sorpresa</span></span></template>
                                 </div>
-                                <h4 class="font-retro text-sm" :class="isOwned(poke.name) ? 'text-white' : (isLegend(poke.name) ? 'text-indigo-200' : 'text-slate-300')" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
+                                <h4 :aria-hidden="!isOwned(poke.name) && isLegend(poke.name)" class="font-retro text-sm" :class="isOwned(poke.name) ? 'text-white' : (isLegend(poke.name) ? 'text-indigo-200' : 'text-slate-300')" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
                                 <template x-if="isOwned(poke.name)">
                                     <div class="w-full space-y-2">
                                         <span class="text-sm text-amber-300 block"><span x-text="poke.type"></span><span x-show="isShiny(poke.name)"> • <span aria-hidden="true">✨</span> Shiny</span></span>
                                         <button @click="speakText(poke.efDesc)" class="w-full min-h-[44px] py-2 text-xs rounded-lg bg-slate-800 text-amber-300" :aria-label="'Escuchar qué entrena ' + poke.name"><span aria-hidden="true">🔊</span> ¿Qué entrena?</button>
                                         <template x-if="canShiny(poke.name)">
-                                            <button type="button" @click="toggleShiny(poke.name)" :aria-pressed="isShiny(poke.name)" :aria-label="'Brillo shiny de ' + poke.name" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
+                                            <button type="button" @click="toggleShiny(poke.name)" :aria-label="(isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo') + ' de ' + poke.name" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
                                         </template>
                                     </div>
                                 </template>
@@ -1354,7 +1354,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                                             <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
                                             <span x-text="poke.cost + (poke.cost > 1 ? ' fichas' : ' ficha')"></span>
                                         </p>
-                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" :aria-label="'Reclutar ' + poke.name + ', cuesta ' + poke.cost + ' fichas'" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-200 border-slate-700 cursor-not-allowed'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
+                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" :aria-label="(currentStudent.tokens >= poke.cost ? 'Reclutar ' : 'Te faltan ' + (poke.cost - currentStudent.tokens) + ' fichas para ') + poke.name + ', cuesta ' + poke.cost + ' fichas'" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-200 border-slate-700 cursor-not-allowed'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
                                     </div>
                                 </template>
                             </div>
@@ -1376,7 +1376,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                         <template x-for="reward in rewardsCatalog" :key="reward.id">
                             <div :class="getCardClass()" class="p-6 border-4 rounded-xl flex flex-col justify-between space-y-5 relative shadow-xl">
                                 <div class="absolute top-4 right-4 bg-amber-400 text-amber-950 font-retro px-3 py-1 rounded text-xs font-bold shadow flex items-center gap-1">
-                                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-3.5 h-3.5 object-contain">
+                                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-3.5 h-3.5 object-contain" alt="">
                                     <span x-text="reward.cost + (reward.cost === 1 ? ' ficha' : ' fichas')"></span>
                                 </div>
                                 <div class="space-y-3">
@@ -1850,19 +1850,19 @@ function spin(el,o){ // tragaperras de 3 rodillos: {items:[{name,img,shiny}], wi
 /* ---------- cofre completo (sin depender de Alpine: se crea aquí el aviso, la tragaperras y el premio) ---------- */
 function chest(o){ // {titulo, sub, head, text, items, win, tick, onEnd, onClose}
   injectCss();
-  const ov=document.createElement('div');ov.className='km-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','Tu cofre');
+  const ov=document.createElement('div');ov.className='km-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-labelledby','km-t');const prev=document.activeElement;
   const card=document.createElement('div');card.className='km-card';ov.appendChild(card);
   const wrap=document.createElement('div');wrap.className='km-wrap';card.appendChild(wrap);
   const x=document.createElement('button');x.className='km-x';x.textContent='✕';x.setAttribute('aria-label','Cerrar');wrap.appendChild(x);
-  const h=document.createElement('h2');h.textContent=o.titulo||'¡Tienes un cofre!';wrap.appendChild(h);
+  const h=document.createElement('h2');h.id='km-t';h.textContent=o.titulo||'¡Tienes un cofre!';wrap.appendChild(h);
   const sub=document.createElement('p');sub.textContent=o.sub||'';wrap.appendChild(sub);
   const caja=document.createElement('div');caja.className='km-cofre';caja.textContent='🎁';caja.setAttribute('aria-hidden','true');wrap.appendChild(caja);
   const zona=document.createElement('div');zona.style.width='100%';wrap.appendChild(zona);
-  const prize=document.createElement('div');prize.className='km-prize';prize.hidden=true;wrap.appendChild(prize);
+  const prize=document.createElement('div');prize.className='km-prize';prize.hidden=true;prize.setAttribute('role','status');wrap.appendChild(prize);
   const btn=document.createElement('button');btn.className='km-btn';btn.textContent='🎰 ABRIR COFRE';wrap.appendChild(btn);
   let skip=null,abierto=false,cerrado=false;
-  const cerrar=()=>{if(cerrado)return;cerrado=true;document.removeEventListener('keydown',esc);ov.remove();if(o.onClose)o.onClose()};
-  const esc=e=>{if(e.key==='Escape')cerrar()};
+  const cerrar=()=>{if(cerrado)return;cerrado=true;document.removeEventListener('keydown',esc);ov.remove();if(prev&&prev.isConnected)prev.focus();if(o.onClose)o.onClose()};
+  const esc=e=>{if(e.key==='Escape')cerrar();else if(e.key==='Tab'){e.preventDefault();(document.activeElement===btn?x:btn).focus()}};
   document.addEventListener('keydown',esc);
   x.onclick=cerrar;
   const premio=()=>{
@@ -2698,6 +2698,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                         this.token = data.token;
                         this.currentRole = 'teacher';
                         this.teacherTab = 'class';
+                        this.rotomMessage = '"¡Bzzzt! ¡Hola, profe! ' + this.rotomTips[Math.floor(Math.random() * this.rotomTips.length)] + '"';
                         this.teacherPasswordInput = '';
                         this.teacherErrorMsg = '';
                         await this.loadProfiles();

@@ -171,12 +171,12 @@
     <!-- SEQUENTIAL LOGIN NOTIFICATION MODAL -->
     <template x-if="activeLoginNotification">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-            <div class="bg-slate-900 max-w-lg w-full p-8 rounded-3xl border-8 border-amber-400 shadow-2xl space-y-6 text-center font-mono animate-badge relative">
+            <div role="dialog" aria-modal="true" aria-labelledby="ln-t" @keydown.escape.window="showNextLoginNotification()" class="bg-slate-900 max-w-lg w-full p-8 rounded-3xl border-8 border-amber-400 shadow-2xl space-y-6 text-center font-mono animate-badge relative">
                 <div class="text-6xl animate-bounce" x-text="activeLoginNotification.icon || '🎁'"></div>
                 <span class="text-amber-400 font-retro text-xs block mb-1">¡MENSAJE DEL PROFESOR!</span>
-                <h3 class="font-retro text-base text-amber-300" x-text="activeLoginNotification.title"></h3>
+                <h3 id="ln-t" class="font-retro text-base text-amber-300" x-text="activeLoginNotification.title"></h3>
                 <p class="text-slate-200 text-sm leading-relaxed" x-text="activeLoginNotification.desc"></p>
-                <button @click="showNextLoginNotification()" class="w-full py-4 bg-amber-400 text-amber-950 font-retro text-xs rounded-xl shadow-xl hover:bg-amber-300 font-bold">
+                <button x-init="$nextTick(() => $el.focus())" @click="showNextLoginNotification()" class="w-full py-4 bg-amber-400 text-amber-950 font-retro text-xs rounded-xl shadow-xl hover:bg-amber-300 font-bold">
                     🚀 ¡SIGUIENTE MENSAJE / CONTINUAR!
                 </button>
             </div>
@@ -209,7 +209,7 @@
 
     <template x-if="showChooseModal">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" @keydown.escape.window="showChooseModal = false">
-            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto p-5 rounded-2xl border-4 border-amber-400 space-y-4" role="dialog" aria-label="Elegir Pokémon shiny">
+            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto p-5 rounded-2xl border-4 border-amber-400 space-y-4" role="dialog" aria-modal="true" aria-label="Elegir Pokémon shiny" x-init="$nextTick(() => $el.querySelector('button').focus())">
                 <div class="flex items-center justify-between gap-3">
                     <h3 class="text-xl font-bold text-amber-200">Elige tu Pokémon shiny</h3>
                     <button @click="showChooseModal = false" aria-label="Cerrar" class="w-12 h-12 rounded-lg bg-slate-800 text-slate-200 text-xl">✕</button>
@@ -1044,7 +1044,7 @@
                                 <div class="bg-black/40 p-3.5 rounded-xl border border-slate-700">
                                     <span class="text-slate-400 block text-xs mb-1">FICHAS</span>
                                     <span class="font-retro text-amber-400 text-sm md:text-base flex items-center justify-center gap-1">
-                                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain">
+                                        <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
                                         <strong x-text="currentStudent.tokens"></strong>
                                     </span>
                                 </div>
@@ -1266,16 +1266,16 @@
                                 <span x-show="isOwned(poke.name) && isShiny(poke.name)" class="absolute -top-2 -right-1 text-xl motion-safe:animate-pulse" aria-hidden="true">✨</span>
                                 <span class="self-start text-sm font-retro rounded px-1.5 py-0.5" :class="isOwned(poke.name) ? 'bg-amber-400 text-amber-950 font-bold' : 'bg-slate-800 text-slate-300'"><span x-show="isOwned(poke.name)" aria-hidden="true">✓ </span><span x-text="'Nº ' + poke.id"></span></span>
                                 <div class="relative w-24 h-24 flex items-center justify-center rounded-full" :class="isOwned(poke.name) ? 'bg-sky-200/20 ring-2 ring-amber-300/70' : (isLegend(poke.name) ? 'bg-indigo-900/60 ring-2 ring-indigo-400/50' : 'bg-slate-800')">
-                                    <template x-if="isOwned(poke.name) || !isLegend(poke.name)"><img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" :alt="isOwned(poke.name) ? poke.name + (isShiny(poke.name) ? ', versión shiny' : '') : ''"></template>
+                                    <template x-if="isOwned(poke.name) || !isLegend(poke.name)"><img loading="lazy" decoding="async" :src="getPokeSprite(poke.name)" class="w-20 h-20 object-contain" :class="isOwned(poke.name) ? (isShiny(poke.name) ? 'animate-shiny' : 'drop-shadow-lg') : 'poke-silhouette'" onerror="this.onerror=null;this.style.visibility='hidden'" alt=""></template>
                                     <template x-if="!isOwned(poke.name) && isLegend(poke.name)"><span class="absolute font-retro text-3xl text-indigo-100 motion-safe:animate-pulse">?<span class="sr-only">Legendario sorpresa</span></span></template>
                                 </div>
-                                <h4 class="font-retro text-sm" :class="isOwned(poke.name) ? 'text-white' : (isLegend(poke.name) ? 'text-indigo-200' : 'text-slate-300')" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
+                                <h4 :aria-hidden="!isOwned(poke.name) && isLegend(poke.name)" class="font-retro text-sm" :class="isOwned(poke.name) ? 'text-white' : (isLegend(poke.name) ? 'text-indigo-200' : 'text-slate-300')" x-text="(isOwned(poke.name) || !isLegend(poke.name)) ? poke.name : '¿¿??'"></h4>
                                 <template x-if="isOwned(poke.name)">
                                     <div class="w-full space-y-2">
                                         <span class="text-sm text-amber-300 block"><span x-text="poke.type"></span><span x-show="isShiny(poke.name)"> • <span aria-hidden="true">✨</span> Shiny</span></span>
                                         <button @click="speakText(poke.efDesc)" class="w-full min-h-[44px] py-2 text-xs rounded-lg bg-slate-800 text-amber-300" :aria-label="'Escuchar qué entrena ' + poke.name"><span aria-hidden="true">🔊</span> ¿Qué entrena?</button>
                                         <template x-if="canShiny(poke.name)">
-                                            <button type="button" @click="toggleShiny(poke.name)" :aria-pressed="isShiny(poke.name)" :aria-label="'Brillo shiny de ' + poke.name" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
+                                            <button type="button" @click="toggleShiny(poke.name)" :aria-label="(isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo') + ' de ' + poke.name" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border border-amber-500 bg-amber-500/20 text-amber-300" x-text="isShiny(poke.name) ? 'Quitar brillo' : 'Poner brillo'"></button>
                                         </template>
                                     </div>
                                 </template>
@@ -1288,7 +1288,7 @@
                                             <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-4 h-4 object-contain" alt="">
                                             <span x-text="poke.cost + (poke.cost > 1 ? ' fichas' : ' ficha')"></span>
                                         </p>
-                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" :aria-label="'Reclutar ' + poke.name + ', cuesta ' + poke.cost + ' fichas'" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-200 border-slate-700 cursor-not-allowed'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
+                                        <button @click="triggerConfetti(); playSound('pokeball'); recruitPokemon(poke)" :aria-label="(currentStudent.tokens >= poke.cost ? 'Reclutar ' : 'Te faltan ' + (poke.cost - currentStudent.tokens) + ' fichas para ') + poke.name + ', cuesta ' + poke.cost + ' fichas'" class="w-full min-h-[44px] py-2 font-retro text-xs rounded-lg border" :class="currentStudent.tokens >= poke.cost ? 'bg-amber-400 text-amber-950 border-amber-600 font-bold' : 'bg-slate-800 text-slate-200 border-slate-700 cursor-not-allowed'" :disabled="currentStudent.tokens < poke.cost" x-text="currentStudent.tokens >= poke.cost ? 'Reclutar' : ('Te faltan ' + (poke.cost - currentStudent.tokens))"></button>
                                     </div>
                                 </template>
                             </div>
@@ -1310,7 +1310,7 @@
                         <template x-for="reward in rewardsCatalog" :key="reward.id">
                             <div :class="getCardClass()" class="p-6 border-4 rounded-xl flex flex-col justify-between space-y-5 relative shadow-xl">
                                 <div class="absolute top-4 right-4 bg-amber-400 text-amber-950 font-retro px-3 py-1 rounded text-xs font-bold shadow flex items-center gap-1">
-                                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-3.5 h-3.5 object-contain">
+                                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nugget.png" class="w-3.5 h-3.5 object-contain" alt="">
                                     <span x-text="reward.cost + (reward.cost === 1 ? ' ficha' : ' fichas')"></span>
                                 </div>
                                 <div class="space-y-3">
@@ -1784,19 +1784,19 @@ function spin(el,o){ // tragaperras de 3 rodillos: {items:[{name,img,shiny}], wi
 /* ---------- cofre completo (sin depender de Alpine: se crea aquí el aviso, la tragaperras y el premio) ---------- */
 function chest(o){ // {titulo, sub, head, text, items, win, tick, onEnd, onClose}
   injectCss();
-  const ov=document.createElement('div');ov.className='km-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','Tu cofre');
+  const ov=document.createElement('div');ov.className='km-ov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-labelledby','km-t');const prev=document.activeElement;
   const card=document.createElement('div');card.className='km-card';ov.appendChild(card);
   const wrap=document.createElement('div');wrap.className='km-wrap';card.appendChild(wrap);
   const x=document.createElement('button');x.className='km-x';x.textContent='✕';x.setAttribute('aria-label','Cerrar');wrap.appendChild(x);
-  const h=document.createElement('h2');h.textContent=o.titulo||'¡Tienes un cofre!';wrap.appendChild(h);
+  const h=document.createElement('h2');h.id='km-t';h.textContent=o.titulo||'¡Tienes un cofre!';wrap.appendChild(h);
   const sub=document.createElement('p');sub.textContent=o.sub||'';wrap.appendChild(sub);
   const caja=document.createElement('div');caja.className='km-cofre';caja.textContent='🎁';caja.setAttribute('aria-hidden','true');wrap.appendChild(caja);
   const zona=document.createElement('div');zona.style.width='100%';wrap.appendChild(zona);
-  const prize=document.createElement('div');prize.className='km-prize';prize.hidden=true;wrap.appendChild(prize);
+  const prize=document.createElement('div');prize.className='km-prize';prize.hidden=true;prize.setAttribute('role','status');wrap.appendChild(prize);
   const btn=document.createElement('button');btn.className='km-btn';btn.textContent='🎰 ABRIR COFRE';wrap.appendChild(btn);
   let skip=null,abierto=false,cerrado=false;
-  const cerrar=()=>{if(cerrado)return;cerrado=true;document.removeEventListener('keydown',esc);ov.remove();if(o.onClose)o.onClose()};
-  const esc=e=>{if(e.key==='Escape')cerrar()};
+  const cerrar=()=>{if(cerrado)return;cerrado=true;document.removeEventListener('keydown',esc);ov.remove();if(prev&&prev.isConnected)prev.focus();if(o.onClose)o.onClose()};
+  const esc=e=>{if(e.key==='Escape')cerrar();else if(e.key==='Tab'){e.preventDefault();(document.activeElement===btn?x:btn).focus()}};
   document.addEventListener('keydown',esc);
   x.onclick=cerrar;
   const premio=()=>{
@@ -2632,6 +2632,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                         this.token = data.token;
                         this.currentRole = 'teacher';
                         this.teacherTab = 'class';
+                        this.rotomMessage = '"¡Bzzzt! ¡Hola, profe! ' + this.rotomTips[Math.floor(Math.random() * this.rotomTips.length)] + '"';
                         this.teacherPasswordInput = '';
                         this.teacherErrorMsg = '';
                         await this.loadProfiles();
