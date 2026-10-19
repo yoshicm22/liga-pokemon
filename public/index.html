@@ -151,6 +151,8 @@
   html body :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
     outline: 3px solid var(--kanto-yellow); outline-offset: 3px;
   }
+  /* sobre fondos claros (informe, diploma, tarjetas) el amarillo no se ve */
+  html body :is(.bg-white, .bg-amber-50, .bg-amber-50\/50) :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline-color: var(--kanto-navy); }
 
   /* --- 9. Scrollbar a juego --- */
   html { scrollbar-color: var(--kanto-bevel) var(--kanto-navy); }
