@@ -332,6 +332,10 @@ const syncMailNew = (sid, list, notify) => mutate(sid, (s) => {
 // guarda las últimas MAIL_KEEP, pero nunca tira una pregunta sin responder; null si están todas sin responder
 const trimMail = (l) => { const out = [...l]; while (out.length > MAIL_KEEP) { const i = out.findIndex((x) => x.reply); if (i < 0) return null; out.splice(i, 1); } return out; };
 
+/* ---------- autoevaluación: el alumno se puntúa esfuerzo y juego limpio (1-3) una vez al día ---------- */
+const EVAL_KEEP = 60;
+const face = (v) => Number.isInteger(v) && v >= 1 && v <= 3;
+
 /* ---------- manejador ---------- */
 export default async (req, context) => {
   try {
@@ -476,6 +480,16 @@ export default async (req, context) => {
           giveMon(s, name, true);
           s.pendingChoice = pc.slice(1);
           pushNotice(s, { title: "¡Pokémon shiny conseguido!", desc: name + " brillante ya es tuyo.", icon: "✨" });
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+      }
+      if (path === "/me/self-eval" && method === "POST") {
+        const b = await readBody(req);
+        if (!face(b.effort) || !face(b.fair)) return fail(400, "Elige una carita en cada pregunta.");
+        const out = await mutate(session.sid, (s) => {
+          // se puede cambiar durante el día; se guardan los últimos EVAL_KEEP días
+          const ev = { ...(isObj(s.selfEval) ? s.selfEval : {}), [madridDay(Date.now())]: [b.effort, b.fair] };
+          s.selfEval = Object.fromEntries(Object.entries(ev).sort(([x], [y]) => x.localeCompare(y)).slice(-EVAL_KEEP));
         });
         return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
       }
