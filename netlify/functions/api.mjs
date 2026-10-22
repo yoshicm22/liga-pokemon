@@ -217,6 +217,11 @@ function giveMon(s, name, shiny) {
   }
   return isNew;
 }
+// compañero: el alumno elige una línea de 3 fases (nunca legendaria) y evoluciona con su esfuerzo; cada forma nueva entra en su Pokédex
+const COMPANIONS = [["Bulbasaur", "Ivysaur", "Venusaur"], ["Charmander", "Charmeleon", "Charizard"], ["Squirtle", "Wartortle", "Blastoise"], ["Pidgey", "Pidgeotto", "Pidgeot"], ["Abra", "Kadabra", "Alakazam"], ["Machop", "Machoke", "Machamp"], ["Geodude", "Graveler", "Golem"], ["Gastly", "Haunter", "Gengar"], ["Poliwag", "Poliwhirl", "Poliwrath"], ["Oddish", "Gloom", "Vileplume"]];
+const EVOLVE_AT = [15, 40]; // energía para la 2ª y la 3ª fase
+// energía = casas superadas + racha actual: baja si falta, pero lo ya evolucionado no se pierde
+const companionEnergy = (s, streak) => (s.gymSessionsData || []).reduce((a, g) => a + (Array.isArray(g) ? g.filter(Boolean).length : 0), 0) + streak;
 const addTrophy = (s, g, kind) => { s.trophies = [...(s.trophies || []), { g, kind }].slice(-40); };
 // el cofre lo abre el alumno en su perfil: aquí solo se guarda lo que le ha tocado
 const setChest = (s, rec, prize) => { s.pendingChests = [...(s.pendingChests || []), { g: rec.g, city: rec.city || "", at: Date.now(), ...prize }].slice(-8); };
@@ -478,6 +483,29 @@ export default async (req, context) => {
           pushNotice(s, { title: "¡Pokémon shiny conseguido!", desc: name + " brillante ya es tuyo.", icon: "✨" });
         });
         return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+      }
+      if (path === "/me/companion" && method === "POST") {
+        const b = await readBody(req);
+        const line = COMPANIONS.find((l) => l[0] === b.name);
+        if (!line) return fail(400, "Ese Pokémon no puede ser tu compañero.");
+        const out = await mutate(session.sid, (s) => {
+          if (s.companion) return fail(409, "Ya tienes compañero.");
+          s.companion = { line: line[0], stage: 0 };
+          giveMon(s, line[0], false);
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+      }
+      if (path === "/me/companion/evolve" && method === "POST") {
+        const closed = await getAttClosed();
+        const out = await mutate(session.sid, (s) => {
+          const c = s.companion, line = c && COMPANIONS.find((l) => l[0] === c.line);
+          if (!line) return fail(409, "Todavía no tienes compañero.");
+          if (c.stage >= 2) return fail(409, "Tu compañero ya está en su forma final.");
+          if (companionEnergy(s, streakOf(s, closed)) < EVOLVE_AT[c.stage]) return fail(409, "A tu compañero aún le falta energía.");
+          s.companion = { line: c.line, stage: c.stage + 1 };
+          giveMon(s, line[c.stage + 1], false);
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, closed) });
       }
       if (path === "/me/messages" && method === "GET") return json({ messages: await getMail(session.sid) });
       if (path === "/me/messages" && method === "POST") {
