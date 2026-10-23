@@ -21,6 +21,9 @@ const REWARD_COST = {
   "Corona de Entrenador": 3, "Inmunidad de Recogida": 4,
 };
 const POKE_COST = {"Bulbasaur": 2, "Ivysaur": 3, "Venusaur": 4, "Charmander": 2, "Charmeleon": 3, "Charizard": 4, "Squirtle": 2, "Wartortle": 3, "Blastoise": 4, "Caterpie": 1, "Metapod": 1, "Butterfree": 2, "Weedle": 1, "Kakuna": 1, "Beedrill": 3, "Pidgey": 1, "Pidgeotto": 2, "Pidgeot": 3, "Rattata": 1, "Raticate": 2, "Spearow": 1, "Fearow": 3, "Ekans": 1, "Arbok": 3, "Pikachu": 2, "Raichu": 3, "Sandshrew": 2, "Sandslash": 3, "Nidoran♀": 2, "Nidorina": 3, "Nidoqueen": 4, "Nidoran♂": 2, "Nidorino": 3, "Nidoking": 4, "Clefairy": 2, "Clefable": 3, "Vulpix": 2, "Ninetales": 4, "Jigglypuff": 2, "Wigglytuff": 3, "Zubat": 1, "Golbat": 3, "Oddish": 1, "Gloom": 2, "Vileplume": 4, "Paras": 1, "Parasect": 3, "Venonat": 1, "Venomoth": 3, "Diglett": 1, "Dugtrio": 3, "Meowth": 2, "Persian": 3, "Psyduck": 2, "Golduck": 3, "Mankey": 2, "Primeape": 3, "Growlithe": 2, "Arcanine": 4, "Poliwag": 1, "Poliwhirl": 2, "Poliwrath": 4, "Abra": 2, "Kadabra": 3, "Alakazam": 4, "Machop": 2, "Machoke": 3, "Machamp": 4, "Bellsprout": 1, "Weepinbell": 2, "Victreebel": 3, "Tentacool": 1, "Tentacruel": 3, "Geodude": 1, "Graveler": 2, "Golem": 4, "Ponyta": 2, "Rapidash": 3, "Slowpoke": 1, "Slowbro": 3, "Magnemite": 1, "Magneton": 3, "Doduo": 1, "Dodrio": 3, "Seel": 1, "Dewgong": 3, "Grimer": 1, "Muk": 3, "Shellder": 1, "Cloyster": 3, "Gastly": 1, "Haunter": 2, "Gengar": 4, "Onix": 3, "Drowzee": 1, "Hypno": 3, "Krabby": 1, "Kingler": 3, "Voltorb": 1, "Electrode": 2, "Exeggcute": 1, "Exeggutor": 3, "Cubone": 2, "Marowak": 3, "Hitmonlee": 3, "Hitmonchan": 3, "Lickitung": 2, "Koffing": 1, "Weezing": 3, "Rhyhorn": 2, "Rhydon": 4, "Chansey": 3, "Tangela": 2, "Kangaskhan": 4, "Horsea": 1, "Seadra": 2, "Goldeen": 1, "Seaking": 3, "Staryu": 2, "Starmie": 3, "Mr. Mime": 3, "Scyther": 3, "Jynx": 3, "Electabuzz": 3, "Magmar": 3, "Pinsir": 3, "Tauros": 3, "Magikarp": 1, "Gyarados": 4, "Lapras": 4, "Ditto": 3, "Eevee": 2, "Vaporeon": 4, "Jolteon": 4, "Flareon": 4, "Porygon": 3, "Omanyte": 2, "Omastar": 3, "Kabuto": 2, "Kabutops": 3, "Aerodactyl": 4, "Snorlax": 4, "Articuno": 5, "Zapdos": 5, "Moltres": 5, "Dratini": 2, "Dragonair": 3, "Dragonite": 5, "Mewtwo": 6, "Mew": 6, "Farfetch'd": 2};
+// objetos de un solo uso (no son premios-privilegio): se compran con fichas y se gastan al usarlos. Debe coincidir con itemsCatalog de public/index.html
+const ITEM_COST = { pocion: 2, superball: 3 };
+const ITEM_MAX = 3; // por tipo en la mochila
 const isPoke = (n) => Object.prototype.hasOwnProperty.call(POKE_COST, n);
 const isReward = (t) => Object.prototype.hasOwnProperty.call(REWARD_COST, t);
 
@@ -498,6 +501,33 @@ export default async (req, context) => {
         });
         return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
       }
+      if (path === "/me/items" && method === "POST") {
+        const b = await readBody(req);
+        const id = b.id;
+        if (!Object.hasOwn(ITEM_COST, id) || !["buy", "use"].includes(b.action)) return fail(400, "Objeto no válido.");
+        const today = madridDay(Date.now());
+        const out = await mutate(session.sid, (s) => {
+          const items = { pocion: 0, superball: 0, ...(isObj(s.items) ? s.items : {}) };
+          if (b.action === "buy") {
+            if (items[id] >= ITEM_MAX) return fail(409, `Ya llevas ${ITEM_MAX} en la mochila. Usa uno antes de comprar otro.`);
+            if ((s.tokens || 0) < ITEM_COST[id]) return fail(409, "No tienes fichas suficientes.");
+            s.tokens -= ITEM_COST[id];
+            items[id]++;
+          } else {
+            if (items[id] < 1) return fail(409, "No te queda ninguno en la mochila.");
+            if (id === "pocion") {
+              if (s.potionDay === today) return fail(409, "Hoy ya has usado una Poción.");
+              s.potionDay = today;
+            } else {
+              if (s.superball) return fail(409, "Ya tienes una Superball preparada.");
+              s.superball = true;
+            }
+            items[id]--;
+          }
+          s.items = items;
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+      }
       if (path === "/me/companion" && method === "POST") {
         const b = await readBody(req);
         const line = COMPANIONS.find((l) => l[0] === b.name);
@@ -600,8 +630,20 @@ export default async (req, context) => {
           const done = !!b.done;
           if (!!row[i] !== done) {
             row[i] = done;
-            s.tokens = Math.max(0, (s.tokens || 0) + (done ? 1 : -1));
-            if (done) pushNotice(s, { title: "¡Sesión Validada en Pista!", desc: "El profesor ha marcado una nueva sesión completada. ¡Has ganado +1 ficha!", icon: "⚡" });
+            // Superball preparada: esta misión da +2. Si el profe la desmarca, la Superball vuelve (a la mochila si ya hay otra preparada); ya estaba pagada, así que puede pasar de ITEM_MAX (el tope es solo para comprar)
+            const cell = g + "-" + i;
+            let gain = 1;
+            if (done && s.superball) { gain = 2; s.superball = false; s.superballCell = cell; }
+            else if (!done && s.superballCell === cell) {
+              gain = 2;
+              delete s.superballCell;
+              if (s.superball) s.items = { ...(isObj(s.items) ? s.items : {}), superball: (s.items?.superball || 0) + 1 };
+              else s.superball = true;
+            }
+            s.tokens = Math.max(0, (s.tokens || 0) + (done ? gain : -gain));
+            if (done) pushNotice(s, gain === 2
+              ? { title: "¡Superball! Misión doble", desc: "El profesor ha marcado tu sesión y tu Superball la ha duplicado. ¡Has ganado +2 fichas!", icon: "🔵" }
+              : { title: "¡Sesión Validada en Pista!", desc: "El profesor ha marcado una nueva sesión completada. ¡Has ganado +1 ficha!", icon: "⚡" });
             s.badges = Array.isArray(s.badges) ? s.badges : [];
             while (s.badges.length < count) s.badges.push(false);
             const completed = row.slice(0, total).filter(Boolean).length;
