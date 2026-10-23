@@ -59,7 +59,6 @@
         @media print {
             body { background: white !important; color: black !important; font-size: 14pt !important; }
             .no-print { display: none !important; }
-            .print-only { display: block !important; }
         }
     /* Racha: --r (0-8) = intensidad del halo; el parpadeo solo si no hay reduced-motion */
     .km-racha-on{background-image:radial-gradient(circle at 2.5rem 50%,rgba(251,146,60,calc(.06 + var(--r)*.03)),transparent 65%)}
@@ -301,7 +300,6 @@
         <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
         <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/></symbol>
-        <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
         <symbol id="i-medal" viewBox="0 0 24 24"><path d="m15.48 12.89 1.51 8.53a.5.5 0 0 1-.81.47l-3.58-2.69a1 1 0 0 0-1.2 0l-3.59 2.69a.5.5 0 0 1-.81-.47l1.51-8.53"/><circle cx="12" cy="8" r="6"/></symbol>
         <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
         <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.33 2q2 0 3.07-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.53"/></symbol>
@@ -352,7 +350,7 @@
 
     <template x-if="evalExit">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 overflow-y-auto" @keydown.escape.window="closeEval()">
-            <div class="bg-slate-900 max-w-2xl w-full p-5 rounded-2xl border-4 border-amber-400 space-y-4 my-8" role="dialog" aria-modal="true" aria-labelledby="km-eval-exit-h" x-init="$nextTick(() => $el.querySelector('[aria-pressed]')?.focus())" @keydown.tab="const f = [...$el.querySelectorAll('button')], a = f[0], z = f[f.length - 1]; if ($event.shiftKey && document.activeElement === a) { $event.preventDefault(); z.focus(); } else if (!$event.shiftKey && document.activeElement === z) { $event.preventDefault(); a.focus(); }">
+            <div class="bg-slate-900 max-w-2xl w-full p-5 rounded-2xl border-4 border-amber-400 space-y-4 my-8" role="dialog" aria-modal="true" aria-labelledby="km-eval-exit-h" x-init="$nextTick(() => $el.querySelector('[aria-pressed]')?.focus())" @keydown.tab="trapTab($event, $el)">
                 <div class="flex items-center justify-between gap-3">
                     <h3 id="km-eval-exit-h" class="text-xl font-bold text-amber-200">Antes de salir: ¿cómo te ha ido hoy?</h3>
                     <button @click="closeEval()" aria-label="Volver sin salir" class="w-12 h-12 shrink-0 rounded-lg bg-slate-800 text-slate-200 text-xl">✕</button>
@@ -401,7 +399,7 @@
 
     <template x-if="showCompanionModal">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" @keydown.escape.window="companionBusy || (showCompanionModal = false)">
-            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto scroll-pb-24 p-5 rounded-2xl border-4 border-emerald-400 space-y-4" role="dialog" aria-modal="true" aria-labelledby="km-comp-modal-h" x-init="$nextTick(() => $el.querySelector('button').focus())">
+            <div class="bg-slate-900 max-w-3xl w-full max-h-[90vh] overflow-y-auto scroll-pb-24 p-5 rounded-2xl border-4 border-emerald-400 space-y-4" role="dialog" aria-modal="true" aria-labelledby="km-comp-modal-h" x-init="$nextTick(() => $el.querySelector('button').focus())" @keydown.tab="trapTab($event, $el)">
                 <div class="flex items-center justify-between gap-3">
                     <h3 id="km-comp-modal-h" class="text-xl font-bold text-emerald-200">Elige tu compañero</h3>
                     <button @click="showCompanionModal = false" aria-label="Cerrar" class="w-12 h-12 rounded-lg bg-slate-800 text-slate-200 text-xl">✕</button>
@@ -425,7 +423,7 @@
 
     <template x-if="companionEvo">
         <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" @keydown.escape.window="companionEvo.done && (companionEvo = null)">
-            <div class="bg-slate-900 max-w-md w-full p-6 rounded-2xl border-4 border-emerald-400 space-y-4 text-center" role="dialog" aria-modal="true" aria-labelledby="km-evo-h" aria-describedby="km-evo-p" tabindex="-1" x-init="$nextTick(() => $el.focus())">
+            <div class="bg-slate-900 max-w-md w-full p-6 rounded-2xl border-4 border-emerald-400 space-y-4 text-center" role="dialog" aria-modal="true" aria-labelledby="km-evo-h" aria-describedby="km-evo-p" tabindex="-1" x-init="$nextTick(() => $el.focus())" @keydown.tab="trapTab($event, $el)">
                 <h3 id="km-evo-h" class="text-xl font-bold text-emerald-200" x-text="companionEvo.done ? '¡Enhorabuena!' : '¿Qué está pasando?'"></h3>
                 <img :src="getPokeSprite(companionEvo.done ? companionEvo.to : companionEvo.from)" width="160" height="160" class="w-40 h-40 object-contain mx-auto" :class="companionEvo.done ? 'drop-shadow-lg' : 'km-evo'" alt="">
                 <p id="km-evo-p" class="text-lg font-bold text-slate-100" x-text="companionEvo.done ? '¡Tu ' + companionEvo.from + ' ha evolucionado en ' + companionEvo.to + '! Ya está en tu Pokédex.' : '¡' + companionEvo.from + ' está evolucionando!'"></p>
@@ -703,7 +701,7 @@
                         <div class="flex items-center gap-3">
                             <h1 class="font-retro text-sm md:text-base text-amber-300 tracking-wider" x-text="currentStudent.name"></h1>
                             <span class="text-xs bg-black/60 text-amber-400 px-2.5 py-0.5 rounded font-retro inline-flex items-center gap-1"><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg><span x-text="currentStudent.faction || 'Rayo'"></span></span>
-                            <button @click="playSound('click'); studentExit()" class="text-xs bg-red-900 text-red-200 px-3 py-1 rounded font-mono hover:bg-red-800 inline-flex items-center gap-1.5"><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg> Salir</button>
+                            <button @click="playSound('click'); studentExit()" class="text-xs bg-red-900 text-red-200 px-3 py-1 min-h-[44px] rounded font-mono hover:bg-red-800 inline-flex items-center gap-1.5"><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg> Salir</button>
                         </div>
                         <p class="km-school text-xs opacity-90 font-mono mt-0.5" x-text="(currentStudent.school || 'Kanto')"></p>
                     </div>
@@ -1023,12 +1021,12 @@
                         <div x-show="!presenting || board.draw" class="bg-slate-900 p-6 rounded-xl border-4 border-amber-500 shadow-2xl space-y-4">
                             <p class="font-retro text-lg text-amber-300 text-center">🎲 SORTEO</p>
                             <div x-show="!presenting" class="flex flex-wrap gap-2 justify-center items-center">
-                                <button id="km-draw-pick" @click="drawPick()" class="px-4 py-2 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 min-h-[44px]">🎲 Alumno al azar</button>
-                                <button @click="drawPairs()" class="px-4 py-2 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 min-h-[44px]">👥 Parejas</button>
+                                <button id="km-draw-pick" @click="drawPick()" class="px-4 py-2 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 min-h-[44px]"><span aria-hidden="true">🎲</span> Alumno al azar</button>
+                                <button @click="drawPairs()" class="px-4 py-2 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 min-h-[44px]"><span aria-hidden="true">👥</span> Parejas</button>
                                 <select x-model.number="teamCount" aria-label="Equipos" class="px-3 py-2 rounded-lg bg-slate-800 text-slate-100 border border-slate-600 font-bold min-h-[44px]">
                                     <option value="2">2 equipos</option><option value="3">3 equipos</option><option value="4">4 equipos</option><option value="5">5 equipos</option><option value="6">6 equipos</option><option value="7">7 equipos</option><option value="8">8 equipos</option>
                                 </select>
-                                <button @click="drawTeams()" class="px-4 py-2 rounded-lg font-retro text-xs font-bold bg-amber-400 text-amber-950 min-h-[44px]">⚖️ Equipos equilibrados</button>
+                                <button @click="drawTeams()" class="px-4 py-2 rounded-lg font-retro text-xs font-bold bg-amber-400 text-amber-950 min-h-[44px]"><span aria-hidden="true">⚖️</span> Equipos equilibrados</button>
                                 <button @click="drawClear()" x-show="board.draw" class="px-4 py-2 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 min-h-[44px]">Ocultar</button>
                             </div>
                             <p x-show="!presenting" class="text-xs text-slate-400 text-center">🚫 Quien tiene falta en la lista de clase no entra. ⚖️ Los equipos salen con el mismo número de alumnos (±1), mezclando escuadrones y nivel (sesiones completadas). El alumno al azar no repite hasta que hayan salido todos.</p>
@@ -1868,10 +1866,6 @@ function ground(x,tx,ty,g){const a=tx*T,b=ty*T,p=GROUND[g]||GROUND.grass;R(x,a,b
     if(g==='grass'){R(x,px,py,1,3,p[1]);R(x,px+1,py+1,1,2,p[2])}else{R(x,px,py,2,1,p[1]);R(x,px+2,py+1,1,1,p[2])}}}
 function flower(x,tx,ty,g){ground(x,tx,ty,g);const a=tx*T,b=ty*T,c=['#ffffff','#f5d442','#ef6a8a'][Math.floor(hash(tx,ty)*3)];
   [[4,5],[10,9],[6,12]].forEach(p=>{R(x,a+p[0],b+p[1]-1,1,3,c);R(x,a+p[0]-1,b+p[1],3,1,c);R(x,a+p[0],b+p[1],1,1,'#f5a623')})}
-function tallg(x,tx,ty){const a=tx*T,b=ty*T;R(x,a,b,T,T,'#3b8b3a');
-  for(let j=0;j<2;j++)for(let i=0;i<2;i++){const ox=a+i*8,oy=b+j*8;
-    R(x,ox+1,oy+3,6,5,'#2a6a2e');R(x,ox+1,oy+2,1,2,'#6bc254');R(x,ox+3,oy+1,1,3,'#6bc254');R(x,ox+5,oy+2,1,2,'#6bc254');R(x,ox+2,oy+4,1,3,'#58a647');R(x,ox+4,oy+4,1,3,'#58a647')}
-  R(x,a,b,T,1,'#2a6a2e')}
 function roadT(x,tx,ty,has){const a=tx*T,b=ty*T;R(x,a,b,T,T,'#c7bfae');
   for(let j=0;j<2;j++)for(let i=0;i<2;i++){const ox=a+i*8+(j?4:0);R(x,ox,b+j*8,7,7,'#d8d0bf');R(x,ox,b+j*8+6,7,1,'#a79f8e')}
   const e='#8a8272';
@@ -1885,9 +1879,6 @@ function treeAt(x,tx,ty,g){const a=tx*T,b=ty*T;ground(x,tx,ty,g);
   R(x,a+4,b+2,3,2,'#6fc476');R(x,a+3,b+6,10,1,'#256b30');R(x,a+9,b+4,3,3,'#256b30')}
 function waterT(x,tx,ty,t){const a=tx*T,b=ty*T;R(x,a,b,T,T,'#4b94de');const ph=RM?0:Math.floor(t/500)%2;
   [[2,3],[9,7],[4,12],[11,1]].forEach((p,i)=>R(x,a+(p[0]+ph*2+i)%12,b+p[1],4,1,'#9bd0f7'))}
-function fence(x,tx,ty,g){const a=tx*T,b=ty*T;ground(x,tx,ty,g);
-  R(x,a,b+8,T,2,'#e9e3d2');R(x,a,b+9,T,1,'#a59d86');R(x,a,b+12,T,2,'#e9e3d2');R(x,a,b+13,T,1,'#a59d86');
-  [2,12].forEach(p=>{R(x,a+p,b+5,3,10,'#f4efe1');R(x,a+p+2,b+5,1,10,'#b0a88e')})}
 function sign(x,tx,ty,g){ground(x,tx,ty,g);const a=tx*T,b=ty*T;R(x,a+7,b+8,2,7,'#6a4528');R(x,a+2,b+2,12,8,INK);R(x,a+3,b+3,10,6,'#c99456');R(x,a+3,b+3,10,1,'#e2b878');R(x,a+5,b+5,6,1,'#7d5a2e');R(x,a+5,b+7,4,1,'#7d5a2e')}
 function boulder(x,a,b,s){s=s||1;R(x,a+2,b+7*s,12*s,8*s,INK);R(x,a+3,b+6*s,10*s,8*s,'#8c94a6');R(x,a+4,b+5*s,7*s,2*s,'#8c94a6');R(x,a+4,b+7*s,4*s,2*s,'#b4bccc');R(x,a+3,b+12*s,10*s,2*s,'#6c7488')}
 function building(x,tx,ty,w,h,o){o=o||{};const a=tx*T,b=ty*T,pw=w*T,ph=h*T,rh=Math.round(ph*.5);
@@ -2050,17 +2041,6 @@ for(let cy=0;cy<GH;cy++)for(let cx=0;cx<GW;cx++){const dx=(cx-20)/19,dy=(cy-12)/
   if(d<1||forced.has(cx+','+cy)){land.add(cx+','+cy);const v=hash(cx*3,cy*5);let ty='g';
     if(cx>=17&&cx<=26&&cy>=8&&cy<=14&&v<.6&&!forced.has(cx+','+cy))ty='m';else if(v>.86&&!forced.has(cx+','+cy))ty='f';
     terr[cx+','+cy]=ty}}
-function cityIcon(x,a,b,th,col){ // 14x14 en (a,b)
-  R(x,a,b,14,14,col);R(x,a,b,14,1,'rgba(255,255,255,.4)');R(x,a,b+13,14,1,'rgba(0,0,0,.3)');
-  const w='#fffdf4';
-  if(th==='rock'){R(x,a+3,b+7,8,5,w);R(x,a+5,b+4,5,4,w)}
-  else if(th==='water'){x.fillStyle=w;x.beginPath();x.moveTo(a+7,b+3);x.lineTo(a+11,b+10);x.lineTo(a+3,b+10);x.fill()}
-  else if(th==='wall'){R(x,a+3,b+3,8,8,w);R(x,a+3,b+5,8,1,col);R(x,a+3,b+8,8,1,col)}
-  else if(th==='track'){x.strokeStyle=w;x.lineWidth=2;x.beginPath();x.ellipse(a+7,b+7,5,3.4,0,0,6.2832);x.stroke()}
-  else if(th==='stage'){R(x,a+3,b+4,8,6,w);R(x,a+5,b+6,1,2,col);R(x,a+8,b+6,1,2,col);R(x,a+5,b+9,4,1,col)}
-  else if(th==='net'){x.fillStyle=w;x.beginPath();x.moveTo(a+7,b+3);x.lineTo(a+10,b+10);x.lineTo(a+4,b+10);x.fill();R(x,a+6,b+9,3,2,col)}
-  else if(th==='volcano'){x.fillStyle=w;x.beginPath();x.moveTo(a+7,b+3);x.lineTo(a+12,b+11);x.lineTo(a+2,b+11);x.fill();R(x,a+5,b+3,4,2,col)}
-  else{x.strokeStyle=w;x.lineWidth=2;x.beginPath();x.arc(a+7,b+7,4.5,0,6.2832);x.stroke();R(x,a+6,b+4,2,6,w)}}
 function regionC(x,t,st){
   const s=2; // 16px tiles sobre 8px de rejilla -> media región
   for(let cy=0;cy<GH;cy++)for(let cx=0;cx<GW;cx++){const k=cx+','+cy,a=cx*8,b=cy*8,ty=terr[k];
@@ -2988,9 +2968,9 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                         }
                         if (this.currentRole === 'teacher' && this.teacherTab === 'class' && !document.hidden && !this.profilesList.some(s => s._busy)) this.loadProfiles();
                         // si el profe cierra la unidad con los alumnos dentro, el cofre les llega igual
-                        if (this.currentRole === 'student' && this.token && !document.hidden && !this.chestRoll && !this.activeLoginNotification && !this.companionBusy && !this.companionEvo && !this.showCompanionModal) {
+                        if (this.currentRole === 'student' && this.token && !document.hidden && this.pollFree()) {
                             this.api('/me').then(d => {
-                                const p = d && d.profile;
+                                const p = this.pollFree() && d && d.profile;
                                 // si no ha cambiado nada, no se le vuelve a sacar de donde esté (un guardado fallido repetía el aviso cada 30 s)
                                 const fp = p ? (p.pendingChests || []).length + ':' + (p.pendingNotifications || []).length : '';
                                 if (p && fp !== this._lastPoll && ((p.pendingChests || []).length || (p.pendingNotifications || []).length)) { this._lastPoll = fp; const st = this.station; this.selectStudent(p); if (st === 'mail') this.openMyMail(); }
@@ -3337,6 +3317,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     finally { this.evalBusy = false; }
                 },
                 studentExit() {
+                    if (this.showCompanionModal || this.companionEvo) return;
                     if (this.missionInfo.type === 'today' && !this.myEvalToday) { this._evalOpener = document.activeElement; this.evalStatus = ''; this.evalExit = true; return; }
                     this.logout();
                 },
@@ -3787,12 +3768,6 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                         this.profilesList.forEach(s => { if (s.att && s.att[date]) { const n = { ...s.att }; delete n[date]; s.att = n; } });
                     } catch (e) { this.notify(e.message); }
                 },
-                async attToggleClosed() {
-                    try {
-                        const d = await this.api('/teacher/attendance', 'PUT', { date: this.todayStr(), closed: !this.attIsClosed });
-                        this.attClosed = d.attClosed;
-                    } catch (e) { this.notify(e.message); }
-                },
                 classIcon(s) {
                     const m = this.attMark(s);
                     if (this.classMode === 'att') return ({ P: '✅', F: '❌', R: '⏰' })[m];
@@ -3896,16 +3871,27 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (!this.mailSel || !(await this.askConfirm('Se borrará este mensaje y el alumno ya no lo verá.', '¿Borrar mensaje?'))) return;
                     if (await this._mailDo('DELETE')) { this.mailSel = null; this.mailMsg = 'Mensaje borrado'; this.$nextTick(() => document.querySelector('[aria-label="Filtrar mensajes"] button')?.focus()); }
                 },
+                // ningún diálogo del alumno abierto ni guardado en curso: el sondeo puede refrescar su perfil
+                pollFree() { return !this.chestRoll && !this.activeLoginNotification && !this.companionBusy && !this.companionEvo && !this.showCompanionModal && !this.evalExit && !this.evalBusy; },
+                // Tab no sale de un diálogo modal (si no tiene botones, se queda en él)
+                trapTab(e, el) {
+                    const f = [...el.querySelectorAll('button')], a = f[0], z = f[f.length - 1];
+                    if (!a) e.preventDefault();
+                    else if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+                    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+                },
                 logout() {
                     this.stopChiptuneBgm();
                     // tablet compartida y proyector: ningún modal con datos del anterior puede seguir en pantalla
                     this.selectedGymModal = null; this.activeStudentTarget = null; this.activeSwapSlot = null;
                     this.showChooseModal = false; this.showFamilyReportModal = false; this.detail = null;
                     this.evalExit = false; this.evalDraft = {}; this.evalStatus = ''; this.evalSavedOk = false;
+                    this.showCompanionModal = false; this.companionEvo = null; this.companionPick = null;
                     this.token = null;
                     this.currentRole = null;
                     this.currentStudentId = null;
                     this.chestRoll = null;
+                    document.querySelectorAll('.km-ov').forEach(el => el.remove()); // el cofre lo pinta KantoMap fuera de Alpine
                     this.activeLoginNotification = null;
                     this.currentNotificationQueue = [];
                     this.myMail = []; this.mailDraft = ''; this.mail = []; this.mailSel = null; this.mailReply = '';
