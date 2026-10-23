@@ -1074,7 +1074,7 @@
                                                                     <p x-show="side === -1" class="px-3 py-2 text-sm text-slate-400 italic">pasa directo</p>
                                                                     <p x-show="side === null" class="min-h-[48px] px-3 py-2 rounded-lg border-2 border-dashed border-slate-600 text-slate-400 italic font-bold text-base md:text-xl flex items-center">Por decidir</p>
                                                                     <p x-show="side !== null && side >= 0 && !cupReady(m)" class="min-h-[48px] px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-400 text-amber-950 font-bold text-base md:text-xl flex items-center gap-2">
-                                                                        <span class="km-ball" :style="'--c:' + (side >= 0 ? cupColor(board.cup.t[side]) : '#94a3b8')" aria-hidden="true"></span><span x-text="side >= 0 ? board.cup.t[side] : ''"></span><span class="ml-auto" aria-hidden="true">✓</span>
+                                                                        <span class="km-ball" :style="'--c:' + (side >= 0 ? cupColor(board.cup.t[side]) : '#94a3b8')" aria-hidden="true"></span><span x-text="side >= 0 ? board.cup.t[side] : ''"></span><span class="sr-only">(clasificado)</span><span class="ml-auto" aria-hidden="true">✓</span>
                                                                     </p>
                                                                     <button x-show="side !== null && side >= 0 && cupReady(m)" @click="cupPick(m, side)" :aria-pressed="m.w !== null && m.w === side ? 'true' : 'false'"
                                                                         :class="m.w !== null && m.w === side ? 'bg-amber-400 text-amber-950 border-amber-200' : (m.w !== null ? 'bg-slate-800 text-slate-400 border-slate-700 line-through' : 'bg-slate-800 text-white border-slate-500 hover:border-amber-400')"
@@ -1557,59 +1557,20 @@
 
                     <!-- Kanban Weekly Grid (Lunes a Domingo) -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 font-mono text-xs md:text-sm">
-                        <!-- Lunes -->
-                        <div class="bg-slate-900/80 border-2 border-slate-800 p-4 rounded-xl space-y-3">
-                            <h5 class="font-retro text-xs text-slate-400 text-center border-b border-slate-800 pb-2">LUNES</h5>
-                            <div class="bg-black/30 p-4 rounded text-center text-slate-500 italic text-xs">Descanso</div>
-                        </div>
-                        <!-- Martes (Sesión 1) -->
-                        <div class="bg-slate-900 border-2 border-amber-500/80 p-4 rounded-xl space-y-3 shadow-lg">
-                            <h5 class="font-retro text-xs text-amber-300 text-center border-b border-slate-800 pb-2">MARTES</h5>
-                            <template x-if="getWeekSession(0)">
-                                <div role="button" tabindex="0" @keydown.enter.self.prevent="$el.click()" @keydown.space.self.prevent="$el.click()" @click="playSound('click'); openGymModalBySession(getWeekSession(0).gIdx)" class="bg-slate-950 p-3 rounded-lg border border-amber-500/50 cursor-pointer hover:border-amber-400 space-y-2">
-                                    <span class="text-[9px] font-retro text-amber-300 block truncate" x-text="getWeekSession(0).gymShort"></span>
-                                    <p class="text-slate-100 font-semibold text-xs leading-snug" x-text="getWeekSession(0).title"></p>
-                                    <span class="text-[10px] block font-bold" :class="getWeekSession(0).completed ? 'text-emerald-400' : 'text-slate-400'" x-text="getWeekSession(0).completed ? '✓ Hecho' : '¡Te espera!'"></span>
-                                </div>
-                            </template>
-                        </div>
-                        <!-- Miércoles (Sesión 2) -->
-                        <div class="bg-slate-900 border-2 border-amber-500/80 p-4 rounded-xl space-y-3 shadow-lg">
-                            <h5 class="font-retro text-xs text-amber-300 text-center border-b border-slate-800 pb-2">MIÉRCOLES</h5>
-                            <template x-if="getWeekSession(1)">
-                                <div role="button" tabindex="0" @keydown.enter.self.prevent="$el.click()" @keydown.space.self.prevent="$el.click()" @click="playSound('click'); openGymModalBySession(getWeekSession(1).gIdx)" class="bg-slate-950 p-3 rounded-lg border border-amber-500/50 cursor-pointer hover:border-amber-400 space-y-2">
-                                    <span class="text-[9px] font-retro text-amber-300 block truncate" x-text="getWeekSession(1).gymShort"></span>
-                                    <p class="text-slate-100 font-semibold text-xs leading-snug" x-text="getWeekSession(1).title"></p>
-                                    <span class="text-[10px] block font-bold" :class="getWeekSession(1).completed ? 'text-emerald-400' : 'text-slate-400'" x-text="getWeekSession(1).completed ? '✓ Hecho' : '¡Te espera!'"></span>
-                                </div>
-                            </template>
-                        </div>
-                        <!-- Jueves -->
-                        <div class="bg-slate-900/80 border-2 border-slate-800 p-4 rounded-xl space-y-3">
-                            <h5 class="font-retro text-xs text-slate-400 text-center border-b border-slate-800 pb-2">JUEVES</h5>
-                            <div class="bg-black/30 p-4 rounded text-center text-slate-500 italic text-xs">Descanso</div>
-                        </div>
-                        <!-- Viernes (Sesión 3) -->
-                        <div class="bg-slate-900 border-2 border-amber-500/80 p-4 rounded-xl space-y-3 shadow-lg">
-                            <h5 class="font-retro text-xs text-amber-300 text-center border-b border-slate-800 pb-2">VIERNES</h5>
-                            <template x-if="getWeekSession(2)">
-                                <div role="button" tabindex="0" @keydown.enter.self.prevent="$el.click()" @keydown.space.self.prevent="$el.click()" @click="playSound('click'); openGymModalBySession(getWeekSession(2).gIdx)" class="bg-slate-950 p-3 rounded-lg border border-amber-500/50 cursor-pointer hover:border-amber-400 space-y-2">
-                                    <span class="text-[9px] font-retro text-amber-300 block truncate" x-text="getWeekSession(2).gymShort"></span>
-                                    <p class="text-slate-100 font-semibold text-xs leading-snug" x-text="getWeekSession(2).title"></p>
-                                    <span class="text-[10px] block font-bold" :class="getWeekSession(2).completed ? 'text-emerald-400' : 'text-slate-400'" x-text="getWeekSession(2).completed ? '✓ Hecho' : '¡Te espera!'"></span>
-                                </div>
-                            </template>
-                        </div>
-                        <!-- Sábado -->
-                        <div class="bg-slate-900/80 border-2 border-slate-800 p-4 rounded-xl space-y-3">
-                            <h5 class="font-retro text-xs text-slate-400 text-center border-b border-slate-800 pb-2">SÁBADO</h5>
-                            <div class="bg-black/30 p-4 rounded text-center text-slate-500 italic text-xs">Fin de semana</div>
-                        </div>
-                        <!-- Domingo -->
-                        <div class="bg-slate-900/80 border-2 border-slate-800 p-4 rounded-xl space-y-3">
-                            <h5 class="font-retro text-xs text-slate-400 text-center border-b border-slate-800 pb-2">DOMINGO</h5>
-                            <div class="bg-black/30 p-4 rounded text-center text-slate-500 italic text-xs">Fin de semana</div>
-                        </div>
+                        <!-- d = [día, nº de sesión de la semana o -1 si no hay clase, texto del descanso] -->
+                        <template x-for="d in [['LUNES', -1, 'Descanso'], ['MARTES', 0], ['MIÉRCOLES', 1], ['JUEVES', -1, 'Descanso'], ['VIERNES', 2], ['SÁBADO', -1, 'Fin de semana'], ['DOMINGO', -1, 'Fin de semana']]" :key="d[0]">
+                            <div class="border-2 p-4 rounded-xl space-y-3" :class="d[1] < 0 ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-900 border-amber-500/80 shadow-lg'">
+                                <h5 class="font-retro text-xs text-center border-b border-slate-800 pb-2" :class="d[1] < 0 ? 'text-slate-400' : 'text-amber-300'" x-text="d[0]"></h5>
+                                <div x-show="d[1] < 0" class="bg-black/30 p-4 rounded text-center text-slate-500 italic text-xs" x-text="d[2]"></div>
+                                <template x-if="d[1] >= 0 && getWeekSession(d[1])">
+                                    <div role="button" tabindex="0" @keydown.enter.self.prevent="$el.click()" @keydown.space.self.prevent="$el.click()" @click="playSound('click'); openGymModalBySession(getWeekSession(d[1]).gIdx)" class="bg-slate-950 p-3 rounded-lg border border-amber-500/50 cursor-pointer hover:border-amber-400 space-y-2">
+                                        <span class="text-[9px] font-retro text-amber-300 block truncate" x-text="getWeekSession(d[1]).gymShort"></span>
+                                        <p class="text-slate-100 font-semibold text-xs leading-snug" x-text="getWeekSession(d[1]).title"></p>
+                                        <span class="text-[10px] block font-bold" :class="getWeekSession(d[1]).completed ? 'text-emerald-400' : 'text-slate-400'" x-text="getWeekSession(d[1]).completed ? '✓ Hecho' : '¡Te espera!'"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
                     </div>
 
                     <!-- Lore Description Box with Rotom-Voz Audio Button -->
@@ -1737,7 +1698,7 @@
 
                     <!-- objetos de un solo uso: van a la mochila y se gastan al usarlos (los valida api.mjs, /me/items) -->
                     <section aria-labelledby="km-items-h" class="space-y-4">
-                        <h4 id="km-items-h" class="font-retro text-sm text-amber-300">🎒 Mochila de objetos <span class="text-slate-300">· de un solo uso</span></h4>
+                        <h4 id="km-items-h" tabindex="-1" class="font-retro text-sm text-amber-300">🎒 Mochila de objetos <span class="text-slate-300">· de un solo uso</span></h4>
                         <p x-show="currentStudent.potionDay === evalToday()" role="status" class="p-4 rounded-xl border-2 border-pink-400 bg-pink-500/15 text-lg font-bold text-pink-100">🧪 Poción activa hoy: enséñale esta pantalla al profe y repite tu intento.</p>
                         <p x-show="currentStudent.superball" role="status" class="p-4 rounded-xl border-2 border-sky-400 bg-sky-500/15 text-lg font-bold text-sky-100">🔵 Superball preparada: tu próxima misión cumplida vale +2 fichas.</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-sm">
@@ -1747,7 +1708,7 @@
                                     <div class="flex-1 min-w-0 space-y-2">
                                         <p class="flex flex-wrap items-baseline gap-x-3"><span class="font-retro text-sm text-amber-300" x-text="it.title"></span><span class="text-amber-200 font-bold" x-text="it.cost + ' fichas'"></span></p>
                                         <p class="text-sm leading-relaxed text-slate-200" x-text="it.desc"></p>
-                                        <p class="text-base font-bold text-white" x-text="'En tu mochila: ' + itemCount(it.id) + ' de 3'"></p>
+                                        <p class="text-base font-bold text-white" x-text="'En tu mochila: ' + itemCount(it.id) + ' de ' + Math.max(3, itemCount(it.id))"></p>
                                         <div class="flex flex-wrap gap-2">
                                             <button @click="itemAct(it, 'buy')" :disabled="itemBusy || currentStudent.tokens < it.cost || itemCount(it.id) >= 3" class="px-4 py-2 rounded-lg bg-amber-400 text-amber-950 font-bold min-h-[48px] disabled:bg-slate-800 disabled:text-slate-300" ><span x-text="itemCount(it.id) >= 3 ? 'Mochila llena' : (currentStudent.tokens < it.cost ? 'Te faltan ' + (it.cost - currentStudent.tokens) : 'Comprar')"></span><span class="sr-only" x-text="': ' + it.title"></span></button>
                                             <button x-show="itemCount(it.id) > 0" @click="itemAct(it, 'use')" :disabled="itemBusy || !itemUsable(it.id)" class="px-4 py-2 rounded-lg bg-emerald-400 text-emerald-950 font-bold min-h-[48px] disabled:bg-slate-800 disabled:text-slate-300" ><span x-text="itemUsable(it.id) ? 'Usar' : (it.id === 'pocion' ? 'Ya usada hoy' : 'Ya preparada')"></span><span class="sr-only" x-text="': ' + it.title"></span></button>
@@ -2873,7 +2834,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 isSessionCompleted(student, gIndex, sIndex) {
                     if (!student) student = this.activeStudentTarget || this.currentStudent;
                     this.ensureGymSessionsData(student);
-                    return !!student.gymSessionsData[gIndex][sIndex];
+                    return !!(student.gymSessionsData[gIndex] || [])[sIndex]; // al cerrar el mapa, Alpine reevalúa con selectedGymModal = null antes de quitarlo
                 },
                 async setSessionAt(student, gIdx, sIdx, done) {
                     if (this.currentRole !== 'teacher' || student._busy) return false;
@@ -3349,6 +3310,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                         this._saveN = (this._saveN || 0) + 1; // un guardado que responda después traería las fichas de antes de la compra
                         Object.assign(c, d.profile);
                         this.playSound(action === 'buy' ? 'token' : 'victory');
+                        if (!this.itemCount(it.id)) this.$nextTick(() => document.getElementById('km-items-h').focus()); // el botón Usar desaparece: que el foco no caiga al body
                         this.notify(action === 'buy' ? '¡' + it.title + ' guardada en tu mochila!' : (it.id === 'pocion' ? '¡Poción usada! Enséñasela al profe.' : '¡Superball preparada para tu próxima misión!'));
                     } catch (e) {
                         this.notify(e.message);
@@ -3691,7 +3653,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 boardKey(e) {
                     if (this.teacherTab !== 'board' || !this.board || this.ui.open || this.showPlanEditor) return;
                     const tag = ((e.target && e.target.tagName) || '').toLowerCase();
-                    if (['input', 'textarea', 'select'].includes(tag)) return;
+                    if (['input', 'textarea', 'select'].includes(tag) || (e.key === ' ' && ['button', 'a'].includes(tag))) return; // Espacio sobre un botón lo pulsa, no avanza de fase
                     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
                     const k = (e.key || '').toLowerCase();
                     if (e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); this.phaseNext(); }
@@ -3840,8 +3802,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (!items) { items = this.makeTeams(); if (!items) return; patch.draw = { kind: 'teams', items }; }
                     patch.cup = { t: this.shuffle(items.map((_, i) => this.drawBalls[i % this.drawBalls.length][0])), w: [] };
                     this.playSound('pokeball');
-                    this.cupMsg = 'Torneo creado: ' + patch.cup.t.join(', ');
-                    this.boardSave(patch);
+                    if (await this.boardSave(patch)) this.cupMsg = 'Torneo creado: ' + patch.cup.t.join(', ');
                 },
                 // Cuadro de eliminación: cada partido {i, a, b, w}; a/b = índice del equipo, -1 = pasa directo, null = por decidir
                 cupBracket(c) {
@@ -3880,7 +3841,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 },
                 async cupEnd() {
                     if (this.cupView && this.cupView.champ === null && !(await this.askConfirm('El torneo aún no tiene campeón. ¿Terminarlo?', '🏆 Terminar torneo'))) return;
-                    this.boardSave({ cup: null });
+                    if (!(await this.boardSave({ cup: null }))) return;
                     this.cupMsg = 'Torneo terminado';
                     const b = document.getElementById('km-cup-start'); if (b) b.focus();
                 },

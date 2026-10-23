@@ -147,8 +147,7 @@ const clearAttempts = (key) => store.delete(rlKey(key));
 const teacherView = (p) => { const { passHash, ...rest } = p; return rest; };
 // racha: listas pasadas seguidas, de la más reciente hacia atrás, sin falta (el retraso cuenta como venir). Al alumno solo le llega el número, nunca las fechas
 const streakOf = (p, closed) => {
-  const day = (t) => new Date(t).toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" }); // mismo formato que las fechas del profe
-  const from = day(Number.isFinite(p.createdAt) ? p.createdAt : 0), today = day(Date.now());
+  const from = madridDay(Number.isFinite(p.createdAt) ? p.createdAt : 0), today = madridDay(Date.now());
   const att = isObj(p.att) ? p.att : {};
   // cuentan las listas pasadas; una falta ya puesta corta aunque la lista no llegara a cerrarse (pero no una de un día futuro)
   const ds = [...new Set([...closed, ...Object.keys(att).filter((d) => att[d] === "F" && d <= today)])].filter((d) => d >= from).sort().reverse();
@@ -159,6 +158,7 @@ const streakOf = (p, closed) => {
 const studentView = (p, closed = []) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return { ...rest, streak: streakOf(p, closed) }; };
 // si falla la lectura, la racha sale a 0 en vez de tumbar el login
 const getAttClosed = async () => { try { const v = await store.get("meta/att-closed", { type: "json" }); return Array.isArray(v) ? v : []; } catch { return []; } };
+const viewOf = async (p) => studentView(p, await getAttClosed());
 const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) && (() => { const x = new Date(d + "T00:00:00Z"); return !Number.isNaN(x.getTime()) && x.toISOString().startsWith(d); })();
 const shortName = (n) => {
   const parts = String(n).trim().split(" ").filter(Boolean);
@@ -265,10 +265,8 @@ function applyUnitPrize(s, rec, prize) {
 /* ---------- pizarra del aula ---------- */
 const DEFAULT_TIMER = { mode: "countdown", status: "idle", durationSec: 300, startedAt: 0, pausedElapsedMs: 0, work: 30, rest: 15, rounds: 6 };
 const DEFAULT_BOARD = { noise: "green", behavior: 0, effort: 0, phase: 0, absent: [], drawn: [], draw: null, cup: null, timer: DEFAULT_TIMER };
-async function getBoard() {
-  const b = (await store.get("board/main", { type: "json" })) || {};
-  return { ...DEFAULT_BOARD, ...b, timer: { ...DEFAULT_TIMER, ...(b.timer || {}) } };
-}
+const withBoard = (b) => ({ ...DEFAULT_BOARD, ...(b || {}), timer: { ...DEFAULT_TIMER, ...(b?.timer || {}) } });
+const getBoard = async () => withBoard(await store.get("board/main", { type: "json" }));
 const getPlans = async () => (await store.get("board/plans", { type: "json" })) || {};
 const intIn = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 function applyBoard(bd, b) {
@@ -314,7 +312,6 @@ function applyBoard(bd, b) {
 }
 
 /* ---------- validación de campos ---------- */
-const STUDENT_FIELDS = ["theme", "ownedPokemon", "activeTeam", "redeemedRewards", "dailyQuestStatus", "achievements", "shinyPokemon"];
 
 function applyCommon(target, body) {
   if ("theme" in body) target.theme = clean(body.theme, 20) || "emerald";
@@ -404,7 +401,7 @@ export default async (req, context) => {
       };
       await putStudent(profile);
       const token = await sign({ role: "student", sid: profile.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(profile, await getAttClosed()) }, 201);
+      return json({ token, profile: await viewOf(profile) }, 201);
     }
 
     if (method === "POST" && path === "/login") {
@@ -421,7 +418,7 @@ export default async (req, context) => {
       if (!checkPw(b.password ?? "", s.passHash)) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!");
       await clearAttempts(`login:${id}`);
       const token = await sign({ role: "student", sid: s.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(s, await getAttClosed()) });
+      return json({ token, profile: await viewOf(s) });
     }
 
     if (method === "POST" && path === "/teacher/login") {
@@ -443,7 +440,7 @@ export default async (req, context) => {
     if (session.role === "student") {
       if (path === "/me" && method === "GET") {
         const s = await getStudent(session.sid);
-        return s ? json({ profile: studentView(s, await getAttClosed()) }) : fail(404, "Perfil no encontrado.");
+        return s ? json({ profile: await viewOf(s) }) : fail(404, "Perfil no encontrado.");
       }
       if (path === "/me" && method === "PUT") {
         const b = await readBody(req);
@@ -475,7 +472,7 @@ export default async (req, context) => {
           // el alumno solo puede vaciar sus avisos (ya vistos)
           if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length === 0) s.pendingNotifications = [];
         });
-        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: studentView(out, await getAttClosed()) });
+        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: await viewOf(out) });
       }
       if (path === "/me/chest-seen" && method === "POST") {
         const b = await readBody(req);
@@ -484,7 +481,7 @@ export default async (req, context) => {
           // con dos dispositivos abiertos, cada uno cierra su propio cofre y no el del otro
           s.pendingChests = q.length && (b.g === undefined || q[0].g === b.g) ? q.slice(1) : q;
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       if (path === "/me/choose" && method === "POST") {
         const b = await readBody(req);
@@ -498,7 +495,7 @@ export default async (req, context) => {
           s.pendingChoice = pc.slice(1);
           pushNotice(s, { title: "¡Pokémon shiny conseguido!", desc: name + " brillante ya es tuyo.", icon: "✨" });
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       if (path === "/me/self-eval" && method === "POST") {
         const b = await readBody(req);
@@ -508,7 +505,7 @@ export default async (req, context) => {
           const ev = { ...(isObj(s.selfEval) ? s.selfEval : {}), [madridDay(Date.now())]: [b.effort, b.fair] };
           s.selfEval = Object.fromEntries(Object.entries(ev).sort(([x], [y]) => x.localeCompare(y)).slice(-EVAL_KEEP));
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       if (path === "/me/items" && method === "POST") {
         const b = await readBody(req);
@@ -535,7 +532,7 @@ export default async (req, context) => {
           }
           s.items = items;
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       if (path === "/me/companion" && method === "POST") {
         const b = await readBody(req);
@@ -546,7 +543,7 @@ export default async (req, context) => {
           s.companion = { line: line[0], stage: 0 };
           giveMon(s, line[0], false);
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       if (path === "/me/companion/evolve" && method === "POST") {
         const closed = await getAttClosed();
@@ -584,7 +581,7 @@ export default async (req, context) => {
         const ids = Array.isArray(b.ids) ? b.ids.slice(0, MAIL_KEEP).map(String) : [];
         const list = (await update("mail/" + session.sid, (cur) => (Array.isArray(cur) ? cur.map((x) => (x.reply && ids.includes(x.id) ? { ...x, seen: true } : x)) : undefined))) || [];
         const out = await syncMailNew(session.sid, list);
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, await getAttClosed()) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       return fail(403, "No permitido.");
     }
@@ -627,8 +624,7 @@ export default async (req, context) => {
         const done_ = (out) => (out instanceof Response ? out : json({ profile: teacherView(out) }));
         if (q[2] === "session") {
           const g = b.gIndex, i = b.sIndex, total = b.gymTotal, count = b.gymCount;
-          const okInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
-          if (!okInt(g, 0, 19) || !okInt(count, 1, 20) || g >= count || !okInt(total, 1, 20) || !okInt(i, 0, 19) || i >= total) return fail(400, "Sesión no válida.");
+          if (!intIn(g, 0, 19) || !intIn(count, 1, 20) || g >= count || !intIn(total, 1, 20) || !intIn(i, 0, 19) || i >= total) return fail(400, "Sesión no válida.");
           return done_(await mutate(q[1], (s) => {
           const grid = Array.isArray(s.gymSessionsData) ? s.gymSessionsData : [];
           while (grid.length < count) grid.push([]);
@@ -696,7 +692,7 @@ export default async (req, context) => {
       if (path === "/teacher/board" && method === "PUT") {
         const b = await readBody(req);
         const bd = await update("board/main", (cur) => {
-          const x = { ...DEFAULT_BOARD, ...(cur || {}), timer: { ...DEFAULT_TIMER, ...(cur?.timer || {}) } };
+          const x = withBoard(cur);
           applyBoard(x, b);
           return x;
         });
@@ -775,7 +771,7 @@ export default async (req, context) => {
         })));
         await update("meta/units", (u) => ({ list: (u?.list || []).map((x) => (x.g === g ? { ...x, done: true } : x)) }));
         const chest = { g, city: rec.city, winners: rec.winners, prizes: rec.prizes, at: Date.now() };
-        await update("board/main", (cur) => ({ ...DEFAULT_BOARD, ...(cur || {}), timer: { ...DEFAULT_TIMER, ...(cur?.timer || {}) }, chest }));
+        await update("board/main", (cur) => ({ ...withBoard(cur), chest }));
         return json({ record: { ...rec, done: true } });
       }
       if (path === "/teacher/messages" && method === "GET") {
