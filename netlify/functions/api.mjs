@@ -261,7 +261,7 @@ function applyUnitPrize(s, rec, prize) {
 
 /* ---------- pizarra del aula ---------- */
 const DEFAULT_TIMER = { mode: "countdown", status: "idle", durationSec: 300, startedAt: 0, pausedElapsedMs: 0, work: 30, rest: 15, rounds: 6 };
-const DEFAULT_BOARD = { noise: "green", behavior: 0, effort: 0, phase: 0, absent: [], drawn: [], draw: null, timer: DEFAULT_TIMER };
+const DEFAULT_BOARD = { noise: "green", behavior: 0, effort: 0, phase: 0, absent: [], drawn: [], draw: null, cup: null, timer: DEFAULT_TIMER };
 async function getBoard() {
   const b = (await store.get("board/main", { type: "json" })) || {};
   return { ...DEFAULT_BOARD, ...b, timer: { ...DEFAULT_TIMER, ...(b.timer || {}) } };
@@ -286,6 +286,15 @@ function applyBoard(bd, b) {
         ? d.items.slice(0, 1).map((x) => clean(x, 40))
         : d.items.map((g) => (Array.isArray(g) ? g.slice(0, 16).map((x) => clean(x, 40)) : []));
       bd.draw = { kind: d.kind, items, at: Date.now() };
+    }
+  }
+  // torneo: t = equipos en orden de cuadro (2-8), w = ganador de cada partido (índice en t o null), ronda a ronda
+  if ("cup" in b) {
+    const c = b.cup;
+    if (c === null) bd.cup = null;
+    else if (isObj(c) && Array.isArray(c.t) && c.t.length >= 2 && c.t.length <= 8 && Array.isArray(c.w) && c.w.length <= 7) {
+      const t = c.t.map((x) => clean(x, 40)), size = 2 ** Math.ceil(Math.log2(t.length));
+      if (t.every(Boolean) && new Set(t).size === t.length) bd.cup = { t, w: c.w.slice(0, size - 1).map((x) => (intIn(x, 0, t.length - 1) ? x : null)) };
     }
   }
   if (isObj(b.timer)) {
