@@ -139,3 +139,9 @@ Una fila por alumno con tres botones grandes ✅ presente / ⏰ tarde / ❌ falt
 - Accesibilidad: tarjetas pulsables con teclado, etiquetas en los campos, nombre en cada emoji y en los botones de cerrar, avisos de error leídos por el lector.
 - Rendimiento: Tailwind compilado (sin compilar en el navegador), brillos shiny fijos en vez de animados, Rotom y las siluetas del álbum con sprites pequeños (unos 2 KB en vez de ~100 KB cada uno).
 
+
+## Pokémon compañero (v14)
+- En Mi Base, cada alumno elige **una vez** un compañero entre 10 líneas de 3 fases (Bulbasaur, Charmander, Squirtle, Pidgey, Abra, Machop, Geodude, Gastly, Poliwag, Oddish). Nunca un legendario.
+- **Energía = casas superadas + racha actual.** Con 15 puede pasar a la 2ª fase y con 40 a la 3ª. Si falta, la racha (y la energía) baja, pero lo ya evolucionado no se pierde.
+- Elegirlo y cada evolución añaden esa forma a la Pokédex como cromo normal, gratis. El brillo shiny sigue saliendo solo de cofres: si el alumno tiene esa forma en shiny, su compañero brilla.
+- Lo valida el servidor (`POST /me/companion` y `/me/companion/evolve`): el alumno no puede fijar el compañero ni la fase desde `PUT /me`. Si cambias las líneas o los umbrales, hazlo en `COMPANIONS` / `EVOLVE_AT` de `api.mjs`, en `companionLines` / `companionEvolveAt` de `index.html` y en la API falsa de la demo.
