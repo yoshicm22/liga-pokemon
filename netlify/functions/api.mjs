@@ -473,9 +473,9 @@ export default async (req, context) => {
           if (s.shinyUnlocked === undefined) s.shinyUnlocked = [...(s.shinyPokemon || [])];
           if (Array.isArray(shinyPokemon)) s.shinyPokemon = shinyPokemon.filter((x) => own.includes(x) && s.shinyUnlocked.includes(x)).slice(0, 200);
           // el alumno solo quita los avisos que ha visto: uno que llegue mientras tanto se queda
-          if (Array.isArray(b.seenNotices) && b.seenNotices.length <= 50) {
+          if (Array.isArray(b.seenNotices)) {
             const q = [...(s.pendingNotifications || [])];
-            for (const n of b.seenNotices) { const i = q.findIndex((x) => x.title === n?.title && x.desc === n?.desc); if (i >= 0) q.splice(i, 1); }
+            for (const n of b.seenNotices.slice(0, 50)) { const i = q.findIndex((x) => x.title === n?.title && x.desc === n?.desc); if (i >= 0) q.splice(i, 1); }
             s.pendingNotifications = q;
           } else if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length === 0) s.pendingNotifications = []; // clientes antiguos en caché
         });
