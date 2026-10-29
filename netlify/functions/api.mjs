@@ -21,6 +21,9 @@ const REWARD_COST = {
   "Corona de Entrenador": 3, "Inmunidad de Recogida": 4,
 };
 const POKE_COST = {"Bulbasaur": 2, "Ivysaur": 3, "Venusaur": 4, "Charmander": 2, "Charmeleon": 3, "Charizard": 4, "Squirtle": 2, "Wartortle": 3, "Blastoise": 4, "Caterpie": 1, "Metapod": 1, "Butterfree": 2, "Weedle": 1, "Kakuna": 1, "Beedrill": 3, "Pidgey": 1, "Pidgeotto": 2, "Pidgeot": 3, "Rattata": 1, "Raticate": 2, "Spearow": 1, "Fearow": 3, "Ekans": 1, "Arbok": 3, "Pikachu": 2, "Raichu": 3, "Sandshrew": 2, "Sandslash": 3, "Nidoran♀": 2, "Nidorina": 3, "Nidoqueen": 4, "Nidoran♂": 2, "Nidorino": 3, "Nidoking": 4, "Clefairy": 2, "Clefable": 3, "Vulpix": 2, "Ninetales": 4, "Jigglypuff": 2, "Wigglytuff": 3, "Zubat": 1, "Golbat": 3, "Oddish": 1, "Gloom": 2, "Vileplume": 4, "Paras": 1, "Parasect": 3, "Venonat": 1, "Venomoth": 3, "Diglett": 1, "Dugtrio": 3, "Meowth": 2, "Persian": 3, "Psyduck": 2, "Golduck": 3, "Mankey": 2, "Primeape": 3, "Growlithe": 2, "Arcanine": 4, "Poliwag": 1, "Poliwhirl": 2, "Poliwrath": 4, "Abra": 2, "Kadabra": 3, "Alakazam": 4, "Machop": 2, "Machoke": 3, "Machamp": 4, "Bellsprout": 1, "Weepinbell": 2, "Victreebel": 3, "Tentacool": 1, "Tentacruel": 3, "Geodude": 1, "Graveler": 2, "Golem": 4, "Ponyta": 2, "Rapidash": 3, "Slowpoke": 1, "Slowbro": 3, "Magnemite": 1, "Magneton": 3, "Doduo": 1, "Dodrio": 3, "Seel": 1, "Dewgong": 3, "Grimer": 1, "Muk": 3, "Shellder": 1, "Cloyster": 3, "Gastly": 1, "Haunter": 2, "Gengar": 4, "Onix": 3, "Drowzee": 1, "Hypno": 3, "Krabby": 1, "Kingler": 3, "Voltorb": 1, "Electrode": 2, "Exeggcute": 1, "Exeggutor": 3, "Cubone": 2, "Marowak": 3, "Hitmonlee": 3, "Hitmonchan": 3, "Lickitung": 2, "Koffing": 1, "Weezing": 3, "Rhyhorn": 2, "Rhydon": 4, "Chansey": 3, "Tangela": 2, "Kangaskhan": 4, "Horsea": 1, "Seadra": 2, "Goldeen": 1, "Seaking": 3, "Staryu": 2, "Starmie": 3, "Mr. Mime": 3, "Scyther": 3, "Jynx": 3, "Electabuzz": 3, "Magmar": 3, "Pinsir": 3, "Tauros": 3, "Magikarp": 1, "Gyarados": 4, "Lapras": 4, "Ditto": 3, "Eevee": 2, "Vaporeon": 4, "Jolteon": 4, "Flareon": 4, "Porygon": 3, "Omanyte": 2, "Omastar": 3, "Kabuto": 2, "Kabutops": 3, "Aerodactyl": 4, "Snorlax": 4, "Articuno": 5, "Zapdos": 5, "Moltres": 5, "Dratini": 2, "Dragonair": 3, "Dragonite": 5, "Mewtwo": 6, "Mew": 6, "Farfetch'd": 2};
+// objetos de un solo uso (no son premios-privilegio): se compran con fichas y se gastan al usarlos. Debe coincidir con itemsCatalog de public/index.html
+const ITEM_COST = { pocion: 2, superball: 3 };
+const ITEM_MAX = 3; // por tipo en la mochila
 const isPoke = (n) => Object.prototype.hasOwnProperty.call(POKE_COST, n);
 const isReward = (t) => Object.prototype.hasOwnProperty.call(REWARD_COST, t);
 
@@ -142,13 +145,26 @@ const clearAttempts = (key) => store.delete(rlKey(key));
 
 /* ---------- datos ---------- */
 const teacherView = (p) => { const { passHash, ...rest } = p; return rest; };
-const studentView = (p) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return rest; };
-const getAttClosed = async () => (await store.get("meta/att-closed", { type: "json" })) || [];
+// racha: listas pasadas seguidas, de la más reciente hacia atrás, sin falta (el retraso cuenta como venir). Al alumno solo le llega el número, nunca las fechas
+const streakOf = (p, closed) => {
+  const from = madridDay(Number.isFinite(p.createdAt) ? p.createdAt : 0), today = madridDay(Date.now());
+  const att = isObj(p.att) ? p.att : {};
+  // cuentan las listas pasadas; una falta ya puesta corta aunque la lista no llegara a cerrarse (pero no una de un día futuro)
+  const ds = [...new Set([...closed, ...Object.keys(att).filter((d) => att[d] === "F" && d <= today)])].filter((d) => d >= from).sort().reverse();
+  let n = 0;
+  for (const d of ds) { if (att[d] === "F") break; n++; }
+  return n;
+};
+const studentView = (p, closed = []) => { const { passHash, weight, height, wingspan, hrRest, note, att, ...rest } = p; return { ...rest, streak: streakOf(p, closed) }; };
+// si falla la lectura, la racha sale a 0 en vez de tumbar el login
+const getAttClosed = async () => { try { const v = await store.get("meta/att-closed", { type: "json" }); return Array.isArray(v) ? v : []; } catch { return []; } };
+const viewOf = async (p) => studentView(p, await getAttClosed());
 const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) && (() => { const x = new Date(d + "T00:00:00Z"); return !Number.isNaN(x.getTime()) && x.toISOString().startsWith(d); })();
 const shortName = (n) => {
   const parts = String(n).trim().split(" ").filter(Boolean);
   return parts.length > 1 ? `${parts[0]} ${[...parts[1]][0].toUpperCase()}.` : (parts[0] || "");
 };
+const nameKeyOf = (name) => "names/" + sha(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()).slice(0, 32);
 const getStudent = (id) => store.get("students/" + id, { type: "json" });
 const putStudent = (p) => store.setJSON("students/" + p.id, p);
 // cambia un alumno de forma atómica; fn recibe el alumno y puede devolver un Response de error
@@ -205,6 +221,11 @@ function giveMon(s, name, shiny) {
   }
   return isNew;
 }
+// compañero: el alumno elige una línea de 3 fases (nunca legendaria) y evoluciona con su esfuerzo; cada forma nueva entra en su Pokédex
+const COMPANIONS = [["Bulbasaur", "Ivysaur", "Venusaur"], ["Charmander", "Charmeleon", "Charizard"], ["Squirtle", "Wartortle", "Blastoise"], ["Pidgey", "Pidgeotto", "Pidgeot"], ["Abra", "Kadabra", "Alakazam"], ["Machop", "Machoke", "Machamp"], ["Geodude", "Graveler", "Golem"], ["Gastly", "Haunter", "Gengar"], ["Poliwag", "Poliwhirl", "Poliwrath"], ["Oddish", "Gloom", "Vileplume"]];
+const EVOLVE_AT = [15, 40]; // energía para la 2ª y la 3ª fase
+// energía = casas superadas + racha actual: baja si falta, pero lo ya evolucionado no se pierde
+const companionEnergy = (s, streak) => (s.gymSessionsData || []).reduce((a, g) => a + (Array.isArray(g) ? g.filter(Boolean).length : 0), 0) + streak;
 const addTrophy = (s, g, kind) => { s.trophies = [...(s.trophies || []), { g, kind }].slice(-40); };
 // el cofre lo abre el alumno en su perfil: aquí solo se guarda lo que le ha tocado
 const setChest = (s, rec, prize) => { s.pendingChests = [...(s.pendingChests || []), { g: rec.g, city: rec.city || "", at: Date.now(), ...prize }].slice(-8); };
@@ -244,11 +265,9 @@ function applyUnitPrize(s, rec, prize) {
 
 /* ---------- pizarra del aula ---------- */
 const DEFAULT_TIMER = { mode: "countdown", status: "idle", durationSec: 300, startedAt: 0, pausedElapsedMs: 0, work: 30, rest: 15, rounds: 6 };
-const DEFAULT_BOARD = { noise: "green", behavior: 0, effort: 0, phase: 0, absent: [], drawn: [], draw: null, timer: DEFAULT_TIMER };
-async function getBoard() {
-  const b = (await store.get("board/main", { type: "json" })) || {};
-  return { ...DEFAULT_BOARD, ...b, timer: { ...DEFAULT_TIMER, ...(b.timer || {}) } };
-}
+const DEFAULT_BOARD = { noise: "green", behavior: 0, effort: 0, phase: 0, absent: [], drawn: [], draw: null, cup: null, timer: DEFAULT_TIMER };
+const withBoard = (b) => ({ ...DEFAULT_BOARD, ...(b || {}), timer: { ...DEFAULT_TIMER, ...(b?.timer || {}) } });
+const getBoard = async () => withBoard(await store.get("board/main", { type: "json" }));
 const getPlans = async () => (await store.get("board/plans", { type: "json" })) || {};
 const intIn = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 function applyBoard(bd, b) {
@@ -271,6 +290,15 @@ function applyBoard(bd, b) {
       bd.draw = { kind: d.kind, items, at: Date.now() };
     }
   }
+  // torneo: t = equipos en orden de cuadro (2-8), w = ganador de cada partido (índice en t o null), ronda a ronda
+  if ("cup" in b) {
+    const c = b.cup;
+    if (c === null) bd.cup = null;
+    else if (isObj(c) && Array.isArray(c.t) && c.t.length >= 2 && c.t.length <= 8 && Array.isArray(c.w) && c.w.length <= 7) {
+      const t = c.t.map((x) => clean(x, 40)), size = 2 ** Math.ceil(Math.log2(t.length));
+      if (t.every(Boolean) && new Set(t).size === t.length) bd.cup = { t, w: c.w.slice(0, size - 1).map((x) => (intIn(x, 0, t.length - 1) ? x : null)) };
+    }
+  }
   if (isObj(b.timer)) {
     const t = b.timer, o = bd.timer;
     if (["countdown", "stopwatch", "intervals"].includes(t.mode)) o.mode = t.mode;
@@ -285,7 +313,6 @@ function applyBoard(bd, b) {
 }
 
 /* ---------- validación de campos ---------- */
-const STUDENT_FIELDS = ["theme", "ownedPokemon", "activeTeam", "redeemedRewards", "dailyQuestStatus", "achievements", "shinyPokemon"];
 
 function applyCommon(target, body) {
   if ("theme" in body) target.theme = clean(body.theme, 20) || "emerald";
@@ -307,6 +334,22 @@ function multisetDiff(oldArr, newArr) {
   return { added, removed: Object.values(c).some((v) => v > 0) };
 }
 const pushNotice = (s, n) => { s.pendingNotifications = [...(s.pendingNotifications || []), n].slice(-50); };
+
+/* ---------- buzón: preguntas del alumno al profe (solo las lee el profe) ---------- */
+const MAIL_MAX = 300, MAIL_PER_DAY = 5, MAIL_KEEP = 30;
+const madridDay = (t) => new Date(t).toLocaleDateString("sv-SE", { timeZone: "Europe/Madrid" });
+const getMail = async (sid) => { const v = await store.get("mail/" + sid, { type: "json" }); return Array.isArray(v) ? v : []; };
+// el punto rojo del alumno = respuestas que aún no ha visto (se recalcula, así nunca se queda colgado)
+const syncMailNew = (sid, list, notify) => mutate(sid, (s) => {
+  s.mailNew = list.filter((x) => x.reply && !x.seen).length;
+  if (notify) pushNotice(s, { title: "¡El profe te ha respondido!", desc: "Mira tu respuesta en la pestaña Buzón.", icon: "✉️" });
+});
+// guarda las últimas MAIL_KEEP, pero nunca tira una pregunta sin responder; null si están todas sin responder
+const trimMail = (l) => { const out = [...l]; while (out.length > MAIL_KEEP) { const i = out.findIndex((x) => x.reply); if (i < 0) return null; out.splice(i, 1); } return out; };
+
+/* ---------- autoevaluación: el alumno se puntúa esfuerzo y juego limpio (1-3) una vez al día ---------- */
+const EVAL_KEEP = 60;
+const face = (v) => Number.isInteger(v) && v >= 1 && v <= 3;
 
 /* ---------- manejador ---------- */
 export default async (req, context) => {
@@ -337,7 +380,7 @@ export default async (req, context) => {
       if (name.length < 2) return fail(400, "Escribe tu nombre (mínimo 2 letras).");
       const pwLen = [...password].length;
       if (pwLen < 3 || pwLen > 64) return fail(400, "El código debe tener entre 3 y 64 símbolos.");
-      const nameKey = "names/" + sha(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()).slice(0, 32);
+      const nameKey = nameKeyOf(name);
       const dupMsg = "Ya existe un alumno con ese nombre. Añade tu inicial o apellido.";
       const existing = await allStudents();
       if (existing.some((s) => s.name.toLowerCase() === name.toLowerCase())) return fail(409, dupMsg);
@@ -359,7 +402,7 @@ export default async (req, context) => {
       };
       await putStudent(profile);
       const token = await sign({ role: "student", sid: profile.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(profile) }, 201);
+      return json({ token, profile: await viewOf(profile) }, 201);
     }
 
     if (method === "POST" && path === "/login") {
@@ -376,7 +419,7 @@ export default async (req, context) => {
       if (!checkPw(b.password ?? "", s.passHash)) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!");
       await clearAttempts(`login:${id}`);
       const token = await sign({ role: "student", sid: s.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
-      return json({ token, profile: studentView(s) });
+      return json({ token, profile: await viewOf(s) });
     }
 
     if (method === "POST" && path === "/teacher/login") {
@@ -398,7 +441,7 @@ export default async (req, context) => {
     if (session.role === "student") {
       if (path === "/me" && method === "GET") {
         const s = await getStudent(session.sid);
-        return s ? json({ profile: studentView(s) }) : fail(404, "Perfil no encontrado.");
+        return s ? json({ profile: await viewOf(s) }) : fail(404, "Perfil no encontrado.");
       }
       if (path === "/me" && method === "PUT") {
         const b = await readBody(req);
@@ -415,7 +458,8 @@ export default async (req, context) => {
           }
           if (strs(ownedPokemon)) {
             const { added, removed } = multisetDiff(s.ownedPokemon || ["Pikachu"], ownedPokemon);
-            const cost = added.reduce((a, x) => a + (isPoke(x) ? POKE_COST[x] : 1e9), 0);
+            // los legendarios solo salen de un cofre: no se pueden comprar
+            const cost = added.reduce((a, x) => a + (isPoke(x) && !LEGENDS.includes(x) ? POKE_COST[x] : 1e9), 0);
             if (!removed && new Set(ownedPokemon).size === ownedPokemon.length && cost <= tokens) { s.ownedPokemon = ownedPokemon; tokens -= cost; }
           }
           s.tokens = tokens;
@@ -429,7 +473,7 @@ export default async (req, context) => {
           // el alumno solo puede vaciar sus avisos (ya vistos)
           if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length === 0) s.pendingNotifications = [];
         });
-        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: await viewOf(out) });
       }
       if (path === "/me/chest-seen" && method === "POST") {
         const b = await readBody(req);
@@ -438,7 +482,7 @@ export default async (req, context) => {
           // con dos dispositivos abiertos, cada uno cierra su propio cofre y no el del otro
           s.pendingChests = q.length && (b.g === undefined || q[0].g === b.g) ? q.slice(1) : q;
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       if (path === "/me/choose" && method === "POST") {
         const b = await readBody(req);
@@ -452,7 +496,93 @@ export default async (req, context) => {
           s.pendingChoice = pc.slice(1);
           pushNotice(s, { title: "¡Pokémon shiny conseguido!", desc: name + " brillante ya es tuyo.", icon: "✨" });
         });
-        return out instanceof Response ? out : json({ ok: true, profile: studentView(out) });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
+      }
+      if (path === "/me/self-eval" && method === "POST") {
+        const b = await readBody(req);
+        if (!face(b.effort) || !face(b.fair)) return fail(400, "Elige una carita en cada pregunta.");
+        const out = await mutate(session.sid, (s) => {
+          // se puede cambiar durante el día; se guardan los últimos EVAL_KEEP días
+          const ev = { ...(isObj(s.selfEval) ? s.selfEval : {}), [madridDay(Date.now())]: [b.effort, b.fair] };
+          s.selfEval = Object.fromEntries(Object.entries(ev).sort(([x], [y]) => x.localeCompare(y)).slice(-EVAL_KEEP));
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
+      }
+      if (path === "/me/items" && method === "POST") {
+        const b = await readBody(req);
+        const id = b.id;
+        if (!Object.hasOwn(ITEM_COST, id) || !["buy", "use"].includes(b.action)) return fail(400, "Objeto no válido.");
+        const today = madridDay(Date.now());
+        const out = await mutate(session.sid, (s) => {
+          const items = { pocion: 0, superball: 0, ...(isObj(s.items) ? s.items : {}) };
+          if (b.action === "buy") {
+            if (items[id] >= ITEM_MAX) return fail(409, `Ya llevas ${ITEM_MAX} en la mochila. Usa uno antes de comprar otro.`);
+            if ((s.tokens || 0) < ITEM_COST[id]) return fail(409, "No tienes fichas suficientes.");
+            s.tokens -= ITEM_COST[id];
+            items[id]++;
+          } else {
+            if (items[id] < 1) return fail(409, "No te queda ninguno en la mochila.");
+            if (id === "pocion") {
+              if (s.potionDay === today) return fail(409, "Hoy ya has usado una Poción.");
+              s.potionDay = today;
+            } else {
+              if (s.superball) return fail(409, "Ya tienes una Superball preparada.");
+              s.superball = true;
+            }
+            items[id]--;
+          }
+          s.items = items;
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
+      }
+      if (path === "/me/companion" && method === "POST") {
+        const b = await readBody(req);
+        const line = COMPANIONS.find((l) => l[0] === b.name);
+        if (!line) return fail(400, "Ese Pokémon no puede ser tu compañero.");
+        const out = await mutate(session.sid, (s) => {
+          if (s.companion) return fail(409, "Ya tienes compañero.");
+          s.companion = { line: line[0], stage: 0 };
+          giveMon(s, line[0], false);
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
+      }
+      if (path === "/me/companion/evolve" && method === "POST") {
+        const closed = await getAttClosed();
+        const out = await mutate(session.sid, (s) => {
+          const c = s.companion, line = c && COMPANIONS.find((l) => l[0] === c.line);
+          if (!line) return fail(409, "Todavía no tienes compañero.");
+          if (c.stage >= 2) return fail(409, "Tu compañero ya está en su forma final.");
+          if (companionEnergy(s, streakOf(s, closed)) < EVOLVE_AT[c.stage]) return fail(409, "A tu compañero aún le falta energía.");
+          s.companion = { line: c.line, stage: c.stage + 1 };
+          giveMon(s, line[c.stage + 1], false);
+        });
+        return out instanceof Response ? out : json({ ok: true, profile: studentView(out, closed) });
+      }
+      if (path === "/me/messages" && method === "GET") return json({ messages: await getMail(session.sid) });
+      if (path === "/me/messages" && method === "POST") {
+        const b = await readBody(req);
+        const text = clean(b.text, MAIL_MAX + 1);
+        if (text.length < 2) return fail(400, "Escribe tu pregunta.");
+        if (text.length > MAIL_MAX) return fail(400, `Máximo ${MAIL_MAX} letras.`);
+        let err = null;
+        const list = await update("mail/" + session.sid, (cur) => {
+          const l = Array.isArray(cur) ? cur : [];
+          const today = madridDay(Date.now());
+          if (l.filter((x) => madridDay(x.at) === today).length >= MAIL_PER_DAY) { err = fail(429, `Ya has mandado ${MAIL_PER_DAY} preguntas hoy. ¡Mañana puedes mandar más!`); return undefined; }
+          const next = trimMail([...l, { id: crypto.randomBytes(6).toString("hex"), text, at: Date.now(), read: false }]);
+          if (!next) { err = fail(429, "Tu buzón está lleno. Espera a que el profe responda."); return undefined; }
+          return next;
+        });
+        if (err) return err;
+        return json({ messages: list }, 201);
+      }
+      if (path === "/me/messages/seen" && method === "POST") {
+        // solo las que el alumno ha visto en pantalla: una respuesta que llega entre medias sigue marcada
+        const b = await readBody(req);
+        const ids = Array.isArray(b.ids) ? b.ids.slice(0, MAIL_KEEP).map(String) : [];
+        const list = (await update("mail/" + session.sid, (cur) => (Array.isArray(cur) ? cur.map((x) => (x.reply && ids.includes(x.id) ? { ...x, seen: true } : x)) : undefined))) || [];
+        const out = await syncMailNew(session.sid, list);
+        return out instanceof Response ? out : json({ ok: true, profile: await viewOf(out) });
       }
       return fail(403, "No permitido.");
     }
@@ -469,7 +599,19 @@ export default async (req, context) => {
           const npLen = [...b.newPassword].length;
           if (npLen < 3 || npLen > 64) return fail(400, "El código debe tener entre 3 y 64 símbolos.");
         }
+        // renombrar mueve la reserva del nombre: si no, el nombre viejo queda bloqueado y el nuevo libre
+        let newKey = null, oldKey = null;
+        if ("name" in b && clean(b.name, 30).length >= 2) {
+          const cur = await getStudent(m[1]);
+          const k = nameKeyOf(clean(b.name, 30));
+          if (cur && k !== cur.nameKey) {
+            const res = await store.setJSON(k, { t: Date.now() }, { onlyIfNew: true });
+            if (res?.modified === false) return fail(409, "Ya existe un alumno con ese nombre. Añade una inicial o apellido.");
+            newKey = k; oldKey = cur.nameKey;
+          }
+        }
         const out = await mutate(m[1], (s) => {
+        if (newKey) s.nameKey = newKey;
         // el profesor no toca lo que es del alumno (Pokémon, canjes, medidas...): evita pisar compras recientes
         if ("name" in b) { const n = clean(b.name, 30); if (n.length >= 2) s.name = n; }
         if ("school" in b) s.school = clean(b.school, 40) || s.school;
@@ -487,6 +629,7 @@ export default async (req, context) => {
         }
         if (typeof b.newPassword === "string" && b.newPassword.length) s.passHash = hashPw(b.newPassword);
         });
+        if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (oldKey) await store.delete(oldKey); }
         return out instanceof Response ? out : json({ profile: teacherView(out) });
       }
       const q = path.match(/^\/teacher\/students\/([\w-]{1,60})\/(session|reward|bonus)$/);
@@ -495,8 +638,7 @@ export default async (req, context) => {
         const done_ = (out) => (out instanceof Response ? out : json({ profile: teacherView(out) }));
         if (q[2] === "session") {
           const g = b.gIndex, i = b.sIndex, total = b.gymTotal, count = b.gymCount;
-          const okInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
-          if (!okInt(g, 0, 19) || !okInt(count, 1, 20) || g >= count || !okInt(total, 1, 20) || !okInt(i, 0, 19) || i >= total) return fail(400, "Sesión no válida.");
+          if (!intIn(g, 0, 19) || !intIn(count, 1, 20) || g >= count || !intIn(total, 1, 20) || !intIn(i, 0, 19) || i >= total) return fail(400, "Sesión no válida.");
           return done_(await mutate(q[1], (s) => {
           const grid = Array.isArray(s.gymSessionsData) ? s.gymSessionsData : [];
           while (grid.length < count) grid.push([]);
@@ -507,8 +649,20 @@ export default async (req, context) => {
           const done = !!b.done;
           if (!!row[i] !== done) {
             row[i] = done;
-            s.tokens = Math.max(0, (s.tokens || 0) + (done ? 1 : -1));
-            if (done) pushNotice(s, { title: "¡Sesión Validada en Pista!", desc: "El profesor ha marcado una nueva sesión completada. ¡Has ganado +1 ficha!", icon: "⚡" });
+            // Superball preparada: esta misión da +2. Si el profe la desmarca, la Superball vuelve (a la mochila si ya hay otra preparada); ya estaba pagada, así que puede pasar de ITEM_MAX (el tope es solo para comprar)
+            const cell = g + "-" + i;
+            let gain = 1;
+            if (done && s.superball) { gain = 2; s.superball = false; s.superballCell = cell; }
+            else if (!done && s.superballCell === cell) {
+              gain = 2;
+              delete s.superballCell;
+              if (s.superball) s.items = { ...(isObj(s.items) ? s.items : {}), superball: (s.items?.superball || 0) + 1 };
+              else s.superball = true;
+            }
+            s.tokens = Math.max(0, (s.tokens || 0) + (done ? gain : -gain));
+            if (done) pushNotice(s, gain === 2
+              ? { title: "¡Superball! Misión doble", desc: "El profesor ha marcado tu sesión y tu Superball la ha duplicado. ¡Has ganado +2 fichas!", icon: "🔵" }
+              : { title: "¡Sesión Validada en Pista!", desc: "El profesor ha marcado una nueva sesión completada. ¡Has ganado +1 ficha!", icon: "⚡" });
             s.badges = Array.isArray(s.badges) ? s.badges : [];
             while (s.badges.length < count) s.badges.push(false);
             const completed = row.slice(0, total).filter(Boolean).length;
@@ -543,6 +697,7 @@ export default async (req, context) => {
         const old = await getStudent(m[1]);
         if (old?.nameKey) await store.delete(old.nameKey);
         await store.delete("students/" + m[1]);
+        await store.delete("mail/" + m[1]);
         return json({ ok: true });
       }
       if (path === "/teacher/board" && method === "GET") {
@@ -551,7 +706,7 @@ export default async (req, context) => {
       if (path === "/teacher/board" && method === "PUT") {
         const b = await readBody(req);
         const bd = await update("board/main", (cur) => {
-          const x = { ...DEFAULT_BOARD, ...(cur || {}), timer: { ...DEFAULT_TIMER, ...(cur?.timer || {}) } };
+          const x = withBoard(cur);
           applyBoard(x, b);
           return x;
         });
@@ -630,8 +785,34 @@ export default async (req, context) => {
         })));
         await update("meta/units", (u) => ({ list: (u?.list || []).map((x) => (x.g === g ? { ...x, done: true } : x)) }));
         const chest = { g, city: rec.city, winners: rec.winners, prizes: rec.prizes, at: Date.now() };
-        await update("board/main", (cur) => ({ ...DEFAULT_BOARD, ...(cur || {}), timer: { ...DEFAULT_TIMER, ...(cur?.timer || {}) }, chest }));
+        await update("board/main", (cur) => ({ ...withBoard(cur), chest }));
         return json({ record: { ...rec, done: true } });
+      }
+      if (path === "/teacher/messages" && method === "GET") {
+        const students = await allStudents();
+        const lists = await Promise.all(students.map(async (st) => (await getMail(st.id)).map((x) => ({ ...x, sid: st.id, name: st.name, faction: st.faction }))));
+        return json({ messages: lists.flat().sort((a, b) => b.at - a.at) });
+      }
+      const mm = path.match(/^\/teacher\/messages\/([\w-]{1,60})\/([a-f0-9]{12})$/);
+      if (mm && (method === "PUT" || method === "DELETE")) {
+        const b = method === "PUT" ? await readBody(req) : {};
+        const reply = "reply" in b ? clean(b.reply, 500) : null;
+        if (reply !== null && reply.length < 1) return fail(400, "Escribe la respuesta.");
+        let found = false, changed = false;
+        const list = await update("mail/" + mm[1], (cur) => {
+          const l = Array.isArray(cur) ? cur : [];
+          const i = l.findIndex((x) => x.id === mm[2]);
+          if (i < 0) return undefined;
+          found = true;
+          if (method === "DELETE") return l.filter((_, j) => j !== i);
+          // repetir la misma respuesta no vuelve a avisar al alumno
+          if (reply !== null && reply !== l[i].reply) { changed = true; Object.assign(l[i], { reply, replyAt: Date.now(), read: true, seen: false }); }
+          if (typeof b.read === "boolean") l[i].read = b.read;
+          return l;
+        });
+        if (!found) return fail(404, "Mensaje no encontrado.");
+        if (changed || method === "DELETE") await syncMailNew(mm[1], list, changed);
+        return json({ ok: true });
       }
       if (path === "/teacher/units" && method === "GET") return json(await getUnits());
       if (path === "/teacher/end-class" && method === "POST") {

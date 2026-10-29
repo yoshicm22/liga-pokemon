@@ -1,6 +1,6 @@
 // Service worker: acelera la carga con el wifi del cole y permite instalar la app.
 // NUNCA guarda respuestas de /api (datos privados de alumnos).
-const CACHE = "liga-kanto-v6";
+const CACHE = "liga-kanto-v7";
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();

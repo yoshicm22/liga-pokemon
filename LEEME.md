@@ -60,7 +60,7 @@ El panel del profesor tiene cuatro pestañas, ordenadas por uso:
 - **🖥️ Pizarra**: ver más abajo. **La lista de clase también está aquí** (solo en tu pantalla; al pulsar Presentar desaparece del proyector), con los mismos modos, y los sorteos y equipos solo cuentan con los alumnos que no faltan hoy.
 - **👥 Alumnos**: directorio con búsqueda, filtro por escuadrón y orden (nombre, fichas, progreso, faltas). Cada fila resume fichas, medallas, misiones y faltas; al abrirla editas al alumno (datos físicos, nota, código nuevo, borrar).
 - **⚙️ Gestión**: semana y plan de la sesión, cerrar unidad (cofres), tarjetas de código para toda la clase, exportar **📊 Progreso (CSV)** y **📋 Asistencia (CSV)** (una fila por alumno y una columna por día, ✅ por defecto en los días con lista cerrada) y ayuda rápida de atajos.
-- La asistencia es **solo del profesor**: el alumno no la ve y no puede modificarla.
+- La asistencia es **solo del profesor**: el alumno no ve sus faltas ni las fechas y no puede modificarla. Solo ve su **🔥 racha** en Mi Base («Llevas 4 clases seguidas participando»): cuenta las listas pasadas seguidas sin falta (el retraso cuenta como venir) y vuelve a 0 si falta.
 - **🖥️ Modo pizarra** (pestaña propia). Pensado para usar **dos dispositivos**: en el ordenador del proyector abres la pestaña y pulsas **📽️ Presentar** (pantalla completa, sin botones, la pantalla no se apaga); desde tu tablet o móvil abres la misma pestaña y lo manejas todo. Los cambios llegan al proyector en unos 4 segundos. Incluye:
   - **Misión de hoy y fases** (🔥 calentamiento, 🎯 parte principal, 🧘 vuelta a la calma) con el texto y el material de cada fase. Escribes el plan de cada sesión en **✏️ Plan de la sesión**; si no hay plan, muestra textos por defecto.
   - **Cronómetro y temporizador**: cuenta atrás (3, 5, 10 min o a medida), cronómetro y circuitos trabajo/descanso (30/15 ×6, tabata 20/10 ×8 o a medida) con colores verde/rojo y pitidos (se activan al presentar; botón 🔔 para silenciar).
@@ -86,7 +86,7 @@ El panel del profesor tiene cuatro pestañas, ordenadas por uso:
 - El temporizador, el semáforo, los medidores y los sorteos se guardan en el servidor y se comparten entre dispositivos; los pitidos suenan solo en el dispositivo donde estén activados.
 - El panel de edición de un alumno guarda los valores que tenía cargados: si lo dejas abierto mucho rato, pulsa Actualizar antes de guardar. Para el día a día usa Clase o Pizarra, que no tienen ese problema.
 - Los Pokémon que compra un alumno se comprueban en su navegador; un alumno muy técnico podría añadirse alguno sin pagar.
-- **Tailwind sigue cargándose desde su CDN** (no he podido compilarlo en local sin conexión). El modo instalable lo cachea tras la primera carga, pero la primera visita con wifi lenta puede tardar.
+- **Tailwind ya va compilado dentro del HTML** (v11). Si cambias clases en `public/index.html` o `demo-v9.html`, ejecuta `npm install` una vez y luego `npm run css` para regenerarlo.
 - Los Pokémon son marcas registradas: para uso interno en clase suele tolerarse; no la publiques abierta a todo internet sin pensarlo.
 
 
@@ -126,3 +126,22 @@ Una fila por alumno con tres botones grandes ✅ presente / ⏰ tarde / ❌ falt
   - El alumno ve el aviso **🎰 Abrir mi cofre** en Mi Base siempre que tenga cofres sin abrir, además de la apertura automática al entrar.
 - **El brillo shiny solo se consigue con cofres.** Los alumnos que ya lo tenían activado lo conservan.
 - Si cambias el listado de Pokémon o sus precios en `index.html`, actualiza `POKE_COST` en `netlify/functions/api.mjs` (y `LEGENDS` / `CONSOLATION`).
+
+## Pokédex como álbum de cromos (v10)
+- La Colección es un álbum: los Pokémon que tienes salen a color (con ✓); los que te faltan, en silueta gris con su precio y el botón Reclutar (o «Te faltan N» si no llegan las fichas).
+- Filtros Todos / Mis cromos / Me faltan y contador «Tu álbum: N de 151 cromos».
+- Los 6 legendarios (Articuno, Zapdos, Moltres, Dragonite, Mewtwo, Mew) ya **no se pueden comprar**: salen como «Legendario sorpresa» y solo llegan en cofres. El servidor rechaza su compra; quien ya tenía alguno lo conserva.
+
+## Acabado profesional (v11)
+- Iconos SVG propios en lugar de FontAwesome (que en la demo no cargaba y dejaba huecos) y de los emojis de botones, pestañas y cabecera. Favicon de Poké Ball y título corto.
+- En el móvil del alumno, las 4 estaciones van en una barra fija abajo, como una app; el aviso de Rotom solo sale en Mi Base.
+- Entrada de alumnos: tarjetas que caben en el móvil y el código de 3 emojis en una ventana propia, con el teclado en 4 columnas.
+- Accesibilidad: tarjetas pulsables con teclado, etiquetas en los campos, nombre en cada emoji y en los botones de cerrar, avisos de error leídos por el lector.
+- Rendimiento: Tailwind compilado (sin compilar en el navegador), brillos shiny fijos en vez de animados, Rotom y las siluetas del álbum con sprites pequeños (unos 2 KB en vez de ~100 KB cada uno).
+
+
+## Pokémon compañero (v14)
+- En Mi Base, cada alumno elige **una vez** un compañero entre 10 líneas de 3 fases (Bulbasaur, Charmander, Squirtle, Pidgey, Abra, Machop, Geodude, Gastly, Poliwag, Oddish). Nunca un legendario.
+- **Energía = casas superadas + racha actual.** Con 15 puede pasar a la 2ª fase y con 40 a la 3ª. Si falta, la racha (y la energía) baja, pero lo ya evolucionado no se pierde.
+- Elegirlo y cada evolución añaden esa forma a la Pokédex como cromo normal, gratis. El brillo shiny sigue saliendo solo de cofres: si el alumno tiene esa forma en shiny, su compañero brilla.
+- Lo valida el servidor (`POST /me/companion` y `/me/companion/evolve`): el alumno no puede fijar el compañero ni la fase desde `PUT /me`. Si cambias las líneas o los umbrales, hazlo en `COMPANIONS` / `EVOLVE_AT` de `api.mjs`, en `companionLines` / `companionEvolveAt` de `index.html` y en la API falsa de la demo.
