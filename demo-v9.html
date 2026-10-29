@@ -61,11 +61,11 @@ window.fetch=async(url,o={})=>{
  if(p==='/me'){const s=get(me);if(!s)return E('Sesión caducada',401);if(m==='GET')return R({profile:sv(s)});
   ['theme','dailyQuestStatus','achievements'].forEach(k=>{if(k in b)s[k]=b[k];});
   const PC={"Farfetch'd": 2, "Bulbasaur": 2, "Ivysaur": 3, "Venusaur": 4, "Charmander": 2, "Charmeleon": 3, "Charizard": 4, "Squirtle": 2, "Wartortle": 3, "Blastoise": 4, "Caterpie": 1, "Metapod": 1, "Butterfree": 2, "Weedle": 1, "Kakuna": 1, "Beedrill": 3, "Pidgey": 1, "Pidgeotto": 2, "Pidgeot": 3, "Rattata": 1, "Raticate": 2, "Spearow": 1, "Fearow": 3, "Ekans": 1, "Arbok": 3, "Pikachu": 2, "Raichu": 3, "Sandshrew": 2, "Sandslash": 3, "Nidoran♀": 2, "Nidorina": 3, "Nidoqueen": 4, "Nidoran♂": 2, "Nidorino": 3, "Nidoking": 4, "Clefairy": 2, "Clefable": 3, "Vulpix": 2, "Ninetales": 4, "Jigglypuff": 2, "Wigglytuff": 3, "Zubat": 1, "Golbat": 3, "Oddish": 1, "Gloom": 2, "Vileplume": 4, "Paras": 1, "Parasect": 3, "Venonat": 1, "Venomoth": 3, "Diglett": 1, "Dugtrio": 3, "Meowth": 2, "Persian": 3, "Psyduck": 2, "Golduck": 3, "Mankey": 2, "Primeape": 3, "Growlithe": 2, "Arcanine": 4, "Poliwag": 1, "Poliwhirl": 2, "Poliwrath": 4, "Abra": 2, "Kadabra": 3, "Alakazam": 4, "Machop": 2, "Machoke": 3, "Machamp": 4, "Bellsprout": 1, "Weepinbell": 2, "Victreebel": 3, "Tentacool": 1, "Tentacruel": 3, "Geodude": 1, "Graveler": 2, "Golem": 4, "Ponyta": 2, "Rapidash": 3, "Slowpoke": 1, "Slowbro": 3, "Magnemite": 1, "Magneton": 3, "Doduo": 1, "Dodrio": 3, "Seel": 1, "Dewgong": 3, "Grimer": 1, "Muk": 3, "Shellder": 1, "Cloyster": 3, "Gastly": 1, "Haunter": 2, "Gengar": 4, "Onix": 3, "Drowzee": 1, "Hypno": 3, "Krabby": 1, "Kingler": 3, "Voltorb": 1, "Electrode": 2, "Exeggcute": 1, "Exeggutor": 3, "Cubone": 2, "Marowak": 3, "Hitmonlee": 3, "Hitmonchan": 3, "Lickitung": 2, "Koffing": 1, "Weezing": 3, "Rhyhorn": 2, "Rhydon": 4, "Chansey": 3, "Tangela": 2, "Kangaskhan": 4, "Horsea": 1, "Seadra": 2, "Goldeen": 1, "Seaking": 3, "Staryu": 2, "Starmie": 3, "Mr. Mime": 3, "Scyther": 3, "Jynx": 3, "Electabuzz": 3, "Magmar": 3, "Pinsir": 3, "Tauros": 3, "Magikarp": 1, "Gyarados": 4, "Lapras": 4, "Ditto": 3, "Eevee": 2, "Vaporeon": 4, "Jolteon": 4, "Flareon": 4, "Porygon": 3, "Omanyte": 2, "Omastar": 3, "Kabuto": 2, "Kabutops": 3, "Aerodactyl": 4, "Snorlax": 4, "Articuno": 5, "Zapdos": 5, "Moltres": 5, "Dratini": 2, "Dragonair": 3, "Dragonite": 5, "Mewtwo": 6, "Mew": 6},RC={"Encargado de Material": 1, "Líder de la Fila": 1, "DJ del Calentamiento": 2, "Árbitro Asistente": 2, "Elegir Compañero/a": 2, "Cronometrador Oficial": 2, "Capitán de Equipo": 3, "Elegir Juego del Viernes": 3, "Corona de Entrenador": 3, "Inmunidad de Recogida": 4};let tk=s.tokens;
-  if(Array.isArray(b.redeemedRewards)&&b.redeemedRewards.length>s.redeemedRewards.length){const add=b.redeemedRewards.slice(s.redeemedRewards.length);const c=add.reduce((x,t)=>x+(RC[t]||1e9),0);if(c<=tk){tk-=c;s.redeemedRewards=b.redeemedRewards;}}
-  if(Array.isArray(b.ownedPokemon)&&b.ownedPokemon.length>s.ownedPokemon.length&&s.ownedPokemon.every(n=>b.ownedPokemon.includes(n))&&new Set(b.ownedPokemon).size===b.ownedPokemon.length){const add=b.ownedPokemon.filter(n=>!s.ownedPokemon.includes(n));const c=add.reduce((x,t)=>x+(['Articuno','Zapdos','Moltres','Dragonite','Mewtwo','Mew'].includes(t)?1e9:(PC[t]||1e9)),0);if(c<=tk){tk-=c;s.ownedPokemon=b.ownedPokemon;}}
+  if(Array.isArray(b.redeemedRewards)){const left=[...s.redeemedRewards],add=[];b.redeemedRewards.forEach(t=>{const i=left.indexOf(t);if(i>=0)left.splice(i,1);else add.push(t);});const c=add.reduce((x,t)=>x+(RC[t]||1e9),0);if(c<=tk){tk-=c;s.redeemedRewards=[...s.redeemedRewards,...add];}}
+  if(Array.isArray(b.ownedPokemon)){const add=[...new Set(b.ownedPokemon)].filter(n=>!s.ownedPokemon.includes(n));const c=add.reduce((x,t)=>x+(['Articuno','Zapdos','Moltres','Dragonite','Mewtwo','Mew'].includes(t)?1e9:(PC[t]||1e9)),0);if(c<=tk){tk-=c;s.ownedPokemon=[...s.ownedPokemon,...add];}}
   s.tokens=tk;if(Array.isArray(b.activeTeam)){const tn=b.activeTeam.filter(x=>x!==null);if(b.activeTeam.length===6&&b.activeTeam.every(x=>x===null||s.ownedPokemon.includes(x))&&new Set(tn).size===tn.length)s.activeTeam=b.activeTeam;}if(s.shinyUnlocked===undefined)s.shinyUnlocked=[...(s.shinyPokemon||[])];if(Array.isArray(b.shinyPokemon))s.shinyPokemon=b.shinyPokemon.filter(x=>s.ownedPokemon.includes(x)&&s.shinyUnlocked.includes(x));
-  if(Array.isArray(b.pendingNotifications)&&!b.pendingNotifications.length)s.pendingNotifications=[];return R({ok:true,tokens:s.tokens,profile:sv(s)});}
- if(m==='POST'&&p==='/me/chest-seen'){const s=get(me);if(!s)return E('Sesión caducada',401);s.pendingChests=(s.pendingChests||[]).slice(1);return R({ok:true,profile:sv(s)});}
+  if(Array.isArray(b.seenNotices)){const q=[...s.pendingNotifications];b.seenNotices.slice(0,50).forEach(n=>{const i=q.findIndex(x=>x.title===n?.title&&x.desc===n?.desc);if(i>=0)q.splice(i,1);});s.pendingNotifications=q;}return R({ok:true,tokens:s.tokens,profile:sv(s)});}
+ if(m==='POST'&&p==='/me/chest-seen'){const s=get(me);if(!s)return E('Sesión caducada',401);const q=s.pendingChests||[];s.pendingChests=q.length&&(b.g===undefined||q[0].g===b.g)?q.slice(1):q;return R({ok:true,profile:sv(s)});}
  if(m==='POST'&&p==='/me/choose'){const s=get(me);if(!s||!(s.pendingChoice||[]).length)return E('No tienes ninguna elección pendiente.',409);if(!PC[b.name])return E('Pokémon no válido.',400);if(PC[b.name]>(s.pendingChoice[0].maxCost||4))return E('Ese Pokémon es demasiado fuerte para esta elección.',400);if(!s.ownedPokemon.includes(b.name)){s.ownedPokemon.push(b.name);const i=s.activeTeam.indexOf(null);if(i>=0)s.activeTeam[i]=b.name;}s.shinyUnlocked=[...new Set([...(s.shinyUnlocked||s.shinyPokemon||[]),b.name])];s.shinyPokemon=[...new Set([...(s.shinyPokemon||[]),b.name])];s.pendingChoice=s.pendingChoice.slice(1);return R({ok:true,profile:sv(s)});}
  if(m==='POST'&&p==='/teacher/unit-close'){const g=b.g;if(db.units.some(u=>u.g===g))return E('Esta unidad ya está cerrada.',409);const F=['Rayo','Cascada','Roca'];const sc=F.map(f=>{const ms=db.s.filter(x=>(x.faction||'Rayo')===f);return{f,n:ms.length,avg:ms.length?ms.reduce((a,x)=>a+((x.gymSessionsData[g]||[]).filter(Boolean).length),0)/ms.length:0};}).filter(q=>q.n);const top=Math.max(0,...sc.map(q=>q.avg));if(top<=0)return E('Nadie ha completado sesiones en esta unidad todavía.',400);const L=['Articuno','Zapdos','Moltres','Dragonite','Mewtwo','Mew'];const winners=sc.filter(q=>q.avg===top).map(q=>q.f);const prizes={};winners.forEach(f=>{const had=db.units.filter(u=>u.prizes[f]&&u.prizes[f].kind==='legend').map(u=>u.prizes[f].name);const used=db.units.flatMap(u=>Object.values(u.prizes||{}).filter(q=>q.kind==='legend').map(q=>q.name));const left=L.filter(n=>!used.includes(n));prizes[f]=left.length?{kind:'legend',name:left[Math.floor(Math.random()*left.length)]}:{kind:Math.random()<.5?'choose':'day'};});
   db.s.forEach(x=>{const f=x.faction||'Rayo';x.trophies=[...(x.trophies||[]),{g,kind:winners.includes(f)?'campeon':'sello'}];const pz=prizes[f];if(winners.includes(f)){if(pz.kind==='legend'){if(!x.ownedPokemon.includes(pz.name)){x.ownedPokemon.push(pz.name);const i=x.activeTeam.indexOf(null);if(i>=0)x.activeTeam[i]=pz.name;}x.shinyUnlocked=[...new Set([...(x.shinyUnlocked||x.shinyPokemon||[]),pz.name])];x.shinyPokemon=[...new Set([...(x.shinyPokemon||[]),pz.name])];x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'legend',name:pz.name}];note(x,{title:'¡COFRE DEL ESCUADRÓN!',desc:'Premio: '+pz.name+' en versión shiny.',icon:'🏆'});}else if(pz.kind==='choose'){x.pendingChoice=[...(x.pendingChoice||[]),{g,maxCost:4}];x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'choose'}];note(x,{title:'¡COFRE DEL ESCUADRÓN!',desc:'Elige tu Pokémon shiny en Mi Base.',icon:'🏆'});}else {x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'day'}];note(x,{title:'¡COFRE DEL ESCUADRÓN!',desc:'¡Día del escuadrón!',icon:'🏆'});}}else{const C=[['Ivysaur',3],['Charmeleon',3],['Wartortle',3],['Beedrill',2],['Pidgeot',3],['Fearow',3],['Arbok',3],['Pikachu',2]];const c=C[Math.floor(Math.random()*C.length)];const rep=x.ownedPokemon.includes(c[0]);if(!rep){x.ownedPokemon.push(c[0]);const i=x.activeTeam.indexOf(null);if(i>=0)x.activeTeam[i]=c[0];note(x,{title:'¡Gran unidad!',desc:'Premio de consolación: '+c[0]+'.',icon:'🎁'});}else{x.tokens+=c[1];note(x,{title:'¡Gran unidad!',desc:c[0]+' repetido, +'+c[1]+' fichas.',icon:'🎁'});}x.pendingChests=[...(x.pendingChests||[]),{g,city:b.city,kind:'consolation',name:c[0],tokens:rep?c[1]:0}];}});
@@ -1086,7 +1086,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                             </div>
                         </div></div>
 
-                        <template x-if="board.chest && (Date.now() - board.chest.at) < 600000">
+                        <template x-if="board.chest && (nowServer() - board.chest.at) < 600000">
                             <div class="bg-amber-400 text-amber-950 p-6 rounded-xl border-8 border-amber-600 shadow-2xl text-center space-y-2">
                                 <p class="text-3xl md:text-5xl font-extrabold">¡COFRE DEL ESCUADRÓN!</p>
                                 <p class="text-2xl md:text-4xl font-bold" x-text="'Ganó ' + board.chest.winners.join(' y ') + ' en ' + (board.chest.city || 'la unidad')"></p>
@@ -3222,7 +3222,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 async _doSave(c, clearNotices, my) {
                     if (this.currentStudent !== c || !this.token) return;
                     const body = { theme: c.theme, ownedPokemon: c.ownedPokemon, activeTeam: c.activeTeam, redeemedRewards: c.redeemedRewards, dailyQuestStatus: c.dailyQuestStatus, achievements: c.achievements, shinyPokemon: c.shinyPokemon };
-                    if (clearNotices) body.pendingNotifications = [];
+                    if (clearNotices) body.seenNotices = clearNotices.map(n => ({ title: n.title, desc: n.desc }));
                     const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked', 'streak'];
                     try {
                         const d = await this.api('/me', 'PUT', body);
@@ -3256,7 +3256,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (this.currentStudent.pendingNotifications.length > 0) {
                         this.currentNotificationQueue = [...this.currentStudent.pendingNotifications];
                         this.currentStudent.pendingNotifications = [];
-                        this.saveCurrentProfile(true);
+                        this.saveCurrentProfile([...this.currentNotificationQueue]);
                         this.showNextLoginNotification();
                     }
                     
@@ -3379,6 +3379,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     });
                 },
                 async closeMyChest() {
+                    if (!this.chestRoll) return; // un segundo cierre marcaría como visto el cofre siguiente
                     this.chestRoll = null;
                     const c = this.currentStudent;
                     if (!c || !(c.pendingChests || []).length) return;
@@ -3696,15 +3697,16 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     } catch (e) { this.offline = true; }
                 },
                 async boardSave(patch) {
-                    const prev = this.board, t0 = Date.now();
+                    const prev = this.board, t0 = Date.now(), my = this._bsn = (this._bsn || 0) + 1;
                     this.board = { ...this.board, ...patch };
                     this._bsaving = (this._bsaving || 0) + 1;
                     try {
                         const d = await this.api('/teacher/board', 'PUT', patch);
-                        this.board = d.board;
+                        // con varias respuestas en vuelo solo manda la del último guardado
+                        if (my === this._bsn) this.board = d.board;
                         this.serverOffset = d.now - (t0 + Date.now()) / 2;
                         return true;
-                    } catch (e) { this.board = prev; this.notify(e.message); return false; }
+                    } catch (e) { if (my === this._bsn) this.board = prev; this.notify(e.message); return false; }
                     finally { this._bsaving--; this._bseq = (this._bseq || 0) + 1; }
                 },
                 boardAdd(key, delta) {
@@ -4249,5 +4251,5 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
         </div>
     </template>
 </div>
-<div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:5px 10px;border-radius:999px;opacity:.92">DEMO v19 · datos de ejemplo · profesor: <b>demo</b> · alumnos: 3 emojis cualquiera</div>
+<div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:5px 10px;border-radius:999px;opacity:.92">DEMO v20 · datos de ejemplo · profesor: <b>demo</b> · alumnos: 3 emojis cualquiera</div>
 </body></html>

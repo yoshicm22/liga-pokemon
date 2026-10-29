@@ -452,15 +452,17 @@ export default async (req, context) => {
           let tokens = s.tokens || 0;
           const strs = (a) => Array.isArray(a) && a.length <= 400 && a.every((x) => typeof x === "string");
           if (strs(redeemedRewards)) {
-            const { added, removed } = multisetDiff(s.redeemedRewards || [], redeemedRewards);
+            // solo se suma lo nuevo: si al cliente le falta algo ganado en otro dispositivo, se conserva en vez de perder la compra
+            const { added } = multisetDiff(s.redeemedRewards || [], redeemedRewards);
             const cost = added.reduce((a, x) => a + (isReward(x) ? REWARD_COST[x] : 1e9), 0);
-            if (!removed && cost <= tokens) { s.redeemedRewards = redeemedRewards; tokens -= cost; }
+            if (cost <= tokens) { s.redeemedRewards = [...(s.redeemedRewards || []), ...added]; tokens -= cost; }
           }
           if (strs(ownedPokemon)) {
-            const { added, removed } = multisetDiff(s.ownedPokemon || ["Pikachu"], ownedPokemon);
+            const cur = s.ownedPokemon || ["Pikachu"];
+            const added = [...new Set(ownedPokemon)].filter((x) => !cur.includes(x));
             // los legendarios solo salen de un cofre: no se pueden comprar
             const cost = added.reduce((a, x) => a + (isPoke(x) && !LEGENDS.includes(x) ? POKE_COST[x] : 1e9), 0);
-            if (!removed && new Set(ownedPokemon).size === ownedPokemon.length && cost <= tokens) { s.ownedPokemon = ownedPokemon; tokens -= cost; }
+            if (cost <= tokens) { s.ownedPokemon = [...cur, ...added]; tokens -= cost; }
           }
           s.tokens = tokens;
           const own = s.ownedPokemon || [];
@@ -470,8 +472,12 @@ export default async (req, context) => {
           // el brillo shiny solo lo da un cofre; los que ya lo tenían activado se respetan
           if (s.shinyUnlocked === undefined) s.shinyUnlocked = [...(s.shinyPokemon || [])];
           if (Array.isArray(shinyPokemon)) s.shinyPokemon = shinyPokemon.filter((x) => own.includes(x) && s.shinyUnlocked.includes(x)).slice(0, 200);
-          // el alumno solo puede vaciar sus avisos (ya vistos)
-          if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length === 0) s.pendingNotifications = [];
+          // el alumno solo quita los avisos que ha visto: uno que llegue mientras tanto se queda
+          if (Array.isArray(b.seenNotices)) {
+            const q = [...(s.pendingNotifications || [])];
+            for (const n of b.seenNotices.slice(0, 50)) { const i = q.findIndex((x) => x.title === n?.title && x.desc === n?.desc); if (i >= 0) q.splice(i, 1); }
+            s.pendingNotifications = q;
+          } else if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length === 0) s.pendingNotifications = []; // clientes antiguos en caché
         });
         return out instanceof Response ? out : json({ ok: true, tokens: out.tokens, profile: await viewOf(out) });
       }
