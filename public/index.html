@@ -989,7 +989,7 @@
                             </div>
                         </div></div>
 
-                        <template x-if="board.chest && (Date.now() - board.chest.at) < 600000">
+                        <template x-if="board.chest && (nowServer() - board.chest.at) < 600000">
                             <div class="bg-amber-400 text-amber-950 p-6 rounded-xl border-8 border-amber-600 shadow-2xl text-center space-y-2">
                                 <p class="text-3xl md:text-5xl font-extrabold">¡COFRE DEL ESCUADRÓN!</p>
                                 <p class="text-2xl md:text-4xl font-bold" x-text="'Ganó ' + board.chest.winners.join(' y ') + ' en ' + (board.chest.city || 'la unidad')"></p>
@@ -3125,7 +3125,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 async _doSave(c, clearNotices, my) {
                     if (this.currentStudent !== c || !this.token) return;
                     const body = { theme: c.theme, ownedPokemon: c.ownedPokemon, activeTeam: c.activeTeam, redeemedRewards: c.redeemedRewards, dailyQuestStatus: c.dailyQuestStatus, achievements: c.achievements, shinyPokemon: c.shinyPokemon };
-                    if (clearNotices) body.pendingNotifications = [];
+                    if (clearNotices) body.seenNotices = clearNotices.map(n => ({ title: n.title, desc: n.desc }));
                     const KEYS = ['tokens', 'ownedPokemon', 'activeTeam', 'redeemedRewards', 'shinyPokemon', 'shinyUnlocked', 'streak'];
                     try {
                         const d = await this.api('/me', 'PUT', body);
@@ -3159,7 +3159,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (this.currentStudent.pendingNotifications.length > 0) {
                         this.currentNotificationQueue = [...this.currentStudent.pendingNotifications];
                         this.currentStudent.pendingNotifications = [];
-                        this.saveCurrentProfile(true);
+                        this.saveCurrentProfile([...this.currentNotificationQueue]);
                         this.showNextLoginNotification();
                     }
                     
@@ -3282,6 +3282,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     });
                 },
                 async closeMyChest() {
+                    if (!this.chestRoll) return; // un segundo cierre marcaría como visto el cofre siguiente
                     this.chestRoll = null;
                     const c = this.currentStudent;
                     if (!c || !(c.pendingChests || []).length) return;
@@ -3599,15 +3600,16 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     } catch (e) { this.offline = true; }
                 },
                 async boardSave(patch) {
-                    const prev = this.board, t0 = Date.now();
+                    const prev = this.board, t0 = Date.now(), my = this._bsn = (this._bsn || 0) + 1;
                     this.board = { ...this.board, ...patch };
                     this._bsaving = (this._bsaving || 0) + 1;
                     try {
                         const d = await this.api('/teacher/board', 'PUT', patch);
-                        this.board = d.board;
+                        // con varias respuestas en vuelo solo manda la del último guardado
+                        if (my === this._bsn) this.board = d.board;
                         this.serverOffset = d.now - (t0 + Date.now()) / 2;
                         return true;
-                    } catch (e) { this.board = prev; this.notify(e.message); return false; }
+                    } catch (e) { if (my === this._bsn) this.board = prev; this.notify(e.message); return false; }
                     finally { this._bsaving--; this._bseq = (this._bseq || 0) + 1; }
                 },
                 boardAdd(key, delta) {
