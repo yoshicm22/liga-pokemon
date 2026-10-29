@@ -164,6 +164,7 @@ const shortName = (n) => {
   const parts = String(n).trim().split(" ").filter(Boolean);
   return parts.length > 1 ? `${parts[0]} ${[...parts[1]][0].toUpperCase()}.` : (parts[0] || "");
 };
+const nameKeyOf = (name) => "names/" + sha(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()).slice(0, 32);
 const getStudent = (id) => store.get("students/" + id, { type: "json" });
 const putStudent = (p) => store.setJSON("students/" + p.id, p);
 // cambia un alumno de forma atómica; fn recibe el alumno y puede devolver un Response de error
@@ -379,7 +380,7 @@ export default async (req, context) => {
       if (name.length < 2) return fail(400, "Escribe tu nombre (mínimo 2 letras).");
       const pwLen = [...password].length;
       if (pwLen < 3 || pwLen > 64) return fail(400, "El código debe tener entre 3 y 64 símbolos.");
-      const nameKey = "names/" + sha(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()).slice(0, 32);
+      const nameKey = nameKeyOf(name);
       const dupMsg = "Ya existe un alumno con ese nombre. Añade tu inicial o apellido.";
       const existing = await allStudents();
       if (existing.some((s) => s.name.toLowerCase() === name.toLowerCase())) return fail(409, dupMsg);
@@ -598,7 +599,19 @@ export default async (req, context) => {
           const npLen = [...b.newPassword].length;
           if (npLen < 3 || npLen > 64) return fail(400, "El código debe tener entre 3 y 64 símbolos.");
         }
+        // renombrar mueve la reserva del nombre: si no, el nombre viejo queda bloqueado y el nuevo libre
+        let newKey = null, oldKey = null;
+        if ("name" in b && clean(b.name, 30).length >= 2) {
+          const cur = await getStudent(m[1]);
+          const k = nameKeyOf(clean(b.name, 30));
+          if (cur && k !== cur.nameKey) {
+            const res = await store.setJSON(k, { t: Date.now() }, { onlyIfNew: true });
+            if (res?.modified === false) return fail(409, "Ya existe un alumno con ese nombre. Añade una inicial o apellido.");
+            newKey = k; oldKey = cur.nameKey;
+          }
+        }
         const out = await mutate(m[1], (s) => {
+        if (newKey) s.nameKey = newKey;
         // el profesor no toca lo que es del alumno (Pokémon, canjes, medidas...): evita pisar compras recientes
         if ("name" in b) { const n = clean(b.name, 30); if (n.length >= 2) s.name = n; }
         if ("school" in b) s.school = clean(b.school, 40) || s.school;
@@ -616,6 +629,7 @@ export default async (req, context) => {
         }
         if (typeof b.newPassword === "string" && b.newPassword.length) s.passHash = hashPw(b.newPassword);
         });
+        if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (oldKey) await store.delete(oldKey); }
         return out instanceof Response ? out : json({ profile: teacherView(out) });
       }
       const q = path.match(/^\/teacher\/students\/([\w-]{1,60})\/(session|reward|bonus)$/);

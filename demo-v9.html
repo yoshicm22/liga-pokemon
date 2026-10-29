@@ -1828,7 +1828,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                                     <h4 class="font-retro text-sm text-amber-300" x-text="reward.title"></h4>
                                     <p class="text-sm leading-relaxed opacity-95" x-text="reward.desc"></p>
                                 </div>
-                                <button @click="triggerConfetti(); playSound('token'); redeemReward(reward)" :aria-label="currentStudent.tokens >= reward.cost ? ('Canjear ' + reward.title) : ('Te faltan ' + (reward.cost - currentStudent.tokens) + (reward.cost - currentStudent.tokens === 1 ? ' ficha' : ' fichas') + ' para ' + reward.title)" class="w-full py-3.5 font-retro text-xs rounded-xl border-2 font-bold" :class="currentStudent.tokens >= reward.cost ? 'bg-amber-400 text-amber-950 border-amber-600' : 'bg-slate-800 text-slate-200 border-slate-700'" :disabled="currentStudent.tokens < reward.cost" x-text="currentStudent.tokens >= reward.cost ? '🎁 Canjear' : ('Te faltan ' + (reward.cost - currentStudent.tokens) + (reward.cost - currentStudent.tokens === 1 ? ' ficha' : ' fichas'))"></button>
+                                <button @click="if (redeemBusy) return; triggerConfetti(); playSound('token'); redeemReward(reward)" :aria-label="currentStudent.tokens >= reward.cost ? ('Canjear ' + reward.title) : ('Te faltan ' + (reward.cost - currentStudent.tokens) + (reward.cost - currentStudent.tokens === 1 ? ' ficha' : ' fichas') + ' para ' + reward.title)" class="w-full py-3.5 font-retro text-xs rounded-xl border-2 font-bold" :class="currentStudent.tokens >= reward.cost ? 'bg-amber-400 text-amber-950 border-amber-600' : 'bg-slate-800 text-slate-200 border-slate-700'" :disabled="redeemBusy || currentStudent.tokens < reward.cost" x-text="currentStudent.tokens >= reward.cost ? '🎁 Canjear' : ('Te faltan ' + (reward.cost - currentStudent.tokens) + (reward.cost - currentStudent.tokens === 1 ? ' ficha' : ' fichas'))"></button>
                             </div>
                         </template>
                     </div>
@@ -2474,7 +2474,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     { id: 'pocion', title: 'Poción', cost: 2, img: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/potion.png', desc: 'Repite un intento en una prueba de clase. Úsala el mismo día y enséñale la pantalla al profe.' },
                     { id: 'superball', title: 'Superball', cost: 3, img: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png', desc: 'Tu próxima misión cumplida vale el doble: +2 fichas en vez de +1.' }
                 ],
-                itemBusy: false,
+                itemBusy: false, redeemBusy: false,
 
                 gyms: [
                     { city: 'Ciudad Plateada', shortName: 'MEDALLA ROCA', badgeImg: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png', badgeName: 'Medalla Roca 🪨', sessions: ['1. Presentación.', '2. Antropometría.', '3. Dinámicas.', '4. Calentamiento 1.', '5. Calentamiento 2.', '6. Cooperativos 1.', '7. Cooperativos 2.', '8. Cooperativos 3.', '9. SA'] },
@@ -3039,11 +3039,13 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     }
                 },
                 redeemReward(reward) {
+                    if (this.redeemBusy) return; // doble toque = doble cobro
                     if (this.currentStudent.tokens >= reward.cost) {
+                        this.redeemBusy = true;
                         this.currentStudent.tokens -= reward.cost;
                         if (!this.currentStudent.redeemedRewards) this.currentStudent.redeemedRewards = [];
                         this.currentStudent.redeemedRewards.push(reward.title);
-                        this.saveCurrentProfile();
+                        Promise.resolve(this.saveCurrentProfile()).finally(() => { this.redeemBusy = false; });
                     }
                 },
                 getPokeSprite(pokeName, small) {
@@ -3161,6 +3163,8 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     const s = this.selectedStudentForLogin;
                     if (!s) return;
                     if (this.loginEmojis.length < 3) { this.loginErrorMsg = 'Elige tus 3 emojis secretos.'; return; }
+                    if (this._sending) return; // doble toque = dos intentos fallidos contados
+                    this._sending = true;
                     try {
                         const data = await this.api('/login', 'POST', { id: s.id, password: this.loginEmojis.join('') });
                         this.token = data.token;
@@ -3172,7 +3176,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     } catch (e) {
                         this.loginErrorMsg = e.message;
                         this.loginEmojis = [];
-                    }
+                    } finally { this._sending = false; }
                 },
                 async verifyTeacherLogin() {
                     try {
@@ -3192,6 +3196,8 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (!this.newStudent.name.trim()) { this.createErrorMsg = 'Escribe tu nombre.'; return; }
                     if (this.newStudent.emojis.length < 3) { this.createErrorMsg = 'Elige tus 3 emojis secretos.'; return; }
                     const code = this.newStudent.emojis.join('');
+                    if (this._sending) return;
+                    this._sending = true;
                     try {
                         const data = await this.api('/register', 'POST', { name: this.newStudent.name, school: this.newStudent.school, gender: this.newStudent.gender, faction: this.newStudent.faction, classCode: this.newStudent.classCode, password: code });
                         this.token = data.token;
@@ -3205,7 +3211,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                         this.notify('Tu código secreto es:\n\n' + code + '\n\n¡Memorízalo o apúntalo!', '🔑 ¡Cuenta creada!');
                     } catch (e) {
                         this.createErrorMsg = e.message;
-                    }
+                    } finally { this._sending = false; }
                 },
                 saveCurrentProfile(clearNotices = false) {
                     if (!this.currentStudentId || this.currentRole !== 'student' || !this.token) return Promise.resolve();
@@ -3507,13 +3513,15 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     return { days, today: by[t] || { n: 0 }, low };
                 },
                 async chooseShiny(name) {
+                    if (this._shinyBusy) return;
+                    this._shinyBusy = true;
                     try {
                         const d = await this.api('/me/choose', 'POST', { name });
                         Object.assign(this.currentStudent, d.profile);
                         this.showChooseModal = false;
                         this.triggerConfetti(); this.playSound('victory');
                         this.notify(name + ' brillante ya es tuyo.');
-                    } catch (e) { this.notify(e.message); }
+                    } catch (e) { this.notify(e.message); } finally { this._shinyBusy = false; }
                 },
                 get aulaSession() { return this.getWeekSession(this.aulaDay); },
                 aulaDone(student) {
@@ -3592,7 +3600,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.ui.open = false;
                     if (r) r(inp ? (ok ? v : null) : ok);
                 },
-                weekday() { return window.__FORCE_DAY !== undefined ? window.__FORCE_DAY : new Date().getDay(); },
+                weekday() { return window.__FORCE_DAY !== undefined ? window.__FORCE_DAY : new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Madrid' })).getDay(); },
                 get missionInfo() {
                     const wd = this.weekday();
                     const names = ['martes', 'miércoles', 'viernes'];
@@ -3949,7 +3957,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     return d.items.map((g, i) => (d.kind === 'pairs' ? 'Pareja ' + (i + 1) : this.drawBalls[i % this.drawBalls.length][0]) + ': ' + g.join(', ')).join('; ');
                 },
                 drawClear() { this.boardSave({ draw: null }); const b = document.getElementById('km-draw-pick'); if (b) b.focus(); },
-                todayStr() { return new Date().toLocaleDateString('sv-SE'); },
+                todayStr() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }); },
                 attMark(s) { return (s.att && s.att[this.todayStr()]) || 'P'; },
                 attStats(s) {
                     const v = Object.values(s.att || {});
@@ -4098,7 +4106,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     if (await this._mailDo('DELETE')) { this.mailSel = null; this.mailMsg = 'Mensaje borrado'; this.$nextTick(() => document.querySelector('[aria-label="Filtrar mensajes"] button')?.focus()); }
                 },
                 // ningún diálogo del alumno abierto ni guardado en curso: el sondeo puede refrescar su perfil
-                pollFree() { return !this.chestRoll && !this.activeLoginNotification && !this.companionBusy && !this.companionEvo && !this.showCompanionModal && !this.evalExit && !this.evalBusy; },
+                pollFree() { return !this.itemBusy && !this.chestRoll && !this.activeLoginNotification && !this.companionBusy && !this.companionEvo && !this.showCompanionModal && !this.evalExit && !this.evalBusy; },
                 // Tab no sale de un diálogo modal (si no tiene botones, se queda en él)
                 trapTab(e, el) {
                     const f = [...el.querySelectorAll('button')], a = f[0], z = f[f.length - 1];
@@ -4241,5 +4249,5 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
         </div>
     </template>
 </div>
-<div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:5px 10px;border-radius:999px;opacity:.92">DEMO v18 · datos de ejemplo · profesor: <b>demo</b> · alumnos: 3 emojis cualquiera</div>
+<div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:5px 10px;border-radius:999px;opacity:.92">DEMO v19 · datos de ejemplo · profesor: <b>demo</b> · alumnos: 3 emojis cualquiera</div>
 </body></html>
