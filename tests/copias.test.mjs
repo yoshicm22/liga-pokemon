@@ -22,6 +22,14 @@ const t2 = t; const st = (await call("/teacher/students", "GET", null, t2)).j.st
 assert.equal((await call("/register", "POST", { name: "Bea Ruiz", password: "🐶🐱🐭", gender: "girl", faction: "Roca", classCode: "K" })).s, 201);
 assert.equal((await call("/teacher/restore", "POST", { snapshot: { app: "x" } }, t2)).s, 400);
 assert.equal((await call("/teacher/restore", "POST", { snapshot: { app: "liga-kanto", data: { "students/a": { id: "b" } } } }, t2)).s, 400);
-assert.equal((await call("/teacher/restore", "POST", { snapshot: { ...snap, data: { ...snap.data, "meta/secret": "x", "rl/z": {} } } }, t2)).s, 200);
-assert.ok(mem.has("meta/secret") && !mem.has("rl/z"));
+const secret = mem.get("meta/secret").d;
+assert.equal((await call("/teacher/restore", "POST", { snapshot: { ...snap, data: { ...snap.data, "meta/secret": { x: 1 }, "rl/z": {}, "names/huerfano": { t: 1 } } } }, t2)).s, 200);
+assert.ok(mem.get("meta/secret").d === secret && !mem.has("rl/z") && !mem.has("names/huerfano"));
+// una copia vacía o de la demo no borra la clase
+assert.equal((await call("/teacher/restore", "POST", { snapshot: { app: "liga-kanto", data: {} } }, t2)).s, 400);
+assert.equal((await call("/teacher/restore", "POST", { snapshot: { app: "liga-kanto-demo", data: { s: [] } } }, t2)).s, 400);
+assert.equal((await call("/teacher/students", "GET", null, t2)).j.students.length, 1);
+// cada restauración deja su propio punto de vuelta atrás, como mucho 5
+const undo = (await call("/teacher/backups", "GET", null, t2)).j.backups.filter((n) => n.includes("-antes-"));
+assert.ok(undo.length >= 1 && undo.length <= 5 && new Set(undo).size === undo.length);
 console.log("ok");

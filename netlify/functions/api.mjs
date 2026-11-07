@@ -202,7 +202,9 @@ function factionTotals(students) {
 /* ---------- copias de seguridad ---------- */
 // todo lo de la clase; quedan fuera el secreto, la sesión (epoch), los límites de intentos y las propias copias
 const BACKUP_PREFIXES = ["students/", "names/", "mail/", "config/", "board/", "meta/units", "meta/att-closed"];
-const BACKUP_KEEP = 14;
+const BACKUP_KEEP = 14; // copias diarias
+const UNDO_KEEP = 5; // copias "antes de restaurar"
+const isDaily = (n) => /^\d{4}-\d{2}-\d{2}$/.test(n);
 const backupKeyOk = (k) => /^[\w/-]{1,120}$/.test(k) && BACKUP_PREFIXES.some((p) => k.startsWith(p));
 async function snapshot() {
   const keys = (await Promise.all(BACKUP_PREFIXES.map((prefix) => store.list({ prefix })))).flatMap((r) => r.blobs.map((b) => b.key));
@@ -212,8 +214,9 @@ async function snapshot() {
 const backupList = async () => (await store.list({ prefix: "backups/" })).blobs.map((b) => b.key.slice(8)).sort();
 async function saveBackup(name) {
   await store.setJSON("backups/" + name, await snapshot());
-  const old = await backupList();
-  for (const n of old.slice(0, Math.max(0, old.length - BACKUP_KEEP))) await store.delete("backups/" + n);
+  const all = await backupList(), daily = all.filter(isDaily), undo = all.filter((n) => !isDaily(n));
+  const drop = [...daily.slice(0, Math.max(0, daily.length - BACKUP_KEEP)), ...undo.slice(0, Math.max(0, undo.length - UNDO_KEEP))];
+  await Promise.all(drop.map((n) => store.delete("backups/" + n)));
 }
 // una copia al día, la primera vez que el profe entra
 async function dailyBackup() {
@@ -223,13 +226,22 @@ async function dailyBackup() {
 // sustituye los datos de la clase por los de la copia; antes guarda cómo estaba todo por si hay que volver atrás
 async function restoreSnapshot(snap) {
   if (snap?.app !== "liga-kanto" || !isObj(snap.data)) return "Esta copia no es de la Liga Kanto.";
-  const entries = Object.entries(snap.data).filter(([k, v]) => backupKeyOk(k) && v !== null && typeof v === "object");
-  if (entries.some(([k, v]) => k.startsWith("students/") && (!isObj(v) || "students/" + v.id !== k))) return "La copia tiene alumnos dañados.";
-  await saveBackup(madridDay(Date.now()) + "-antes-de-restaurar");
+  const ok = (k, v) => v !== null && typeof v === "object" && (k === "meta/att-closed" ? Array.isArray(v) : isObj(v)) && (k !== "meta/units" || Array.isArray(v.list));
+  let entries = Object.entries(snap.data).filter(([k, v]) => backupKeyOk(k) && ok(k, v));
+  if (entries.length > 3000) return "La copia es demasiado grande.";
+  const students = entries.filter(([k]) => k.startsWith("students/")).map(([, v]) => v);
+  if (!students.length) return "La copia no tiene alumnos.";
+  if (entries.some(([k, v]) => k.startsWith("students/") && "students/" + v.id !== k)) return "La copia tiene alumnos dañados.";
+  // una reserva de nombre sin su alumno dejaría ese nombre bloqueado para siempre
+  const used = new Set(students.map((x) => x.nameKey));
+  entries = entries.filter(([k]) => !k.startsWith("names/") || used.has(k));
+  const hm = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Madrid" }).replace(/:/g, "");
+  await saveBackup(madridDay(Date.now()) + "-antes-" + hm);
   const now = (await snapshot()).data;
   const keep = new Set(entries.map(([k]) => k));
-  for (const k of Object.keys(now)) if (!keep.has(k)) await store.delete(k);
-  for (const [k, v] of entries) await store.setJSON(k, v);
+  // primero se escribe todo y después se borra lo que sobra: si se corta a medias, no falta nada de la copia
+  await Promise.all(entries.map(([k, v]) => store.setJSON(k, v)));
+  await Promise.all(Object.keys(now).filter((k) => !keep.has(k)).map((k) => store.delete(k)));
   await update("meta/epoch", (e) => (e || 0) + 1); // los alumnos vuelven a entrar con los datos restaurados
   return null;
 }
