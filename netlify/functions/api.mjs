@@ -12,7 +12,7 @@ function pgStore() {
   const base = process.env.SUPABASE_URL.replace(/\/+$/, "") + "/rest/v1/kv";
   const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const h = (extra) => ({ apikey: k, authorization: "Bearer " + k, "content-type": "application/json", ...extra });
-  const eq = (key) => "key=eq." + encodeURIComponent(`"${key}"`);
+  const eq = (key) => "key=eq." + encodeURIComponent(key); // con eq. PostgREST toma el valor tal cual (las comillas solo cuentan dentro de in.(...))
   // cada escritura pone una versión nueva al azar: es el "etag" para escribir solo si nadie escribió entre medias
   const ver = () => crypto.randomInt(1, 2 ** 47);
   async function call(url, opt = {}) {
@@ -42,15 +42,22 @@ function pgStore() {
     async delete(key) { await call(`${base}?${eq(key)}`, { method: "DELETE" }); },
     // la columna key usa collate "C": el rango [prefijo, prefijo+U+FFFF) son justo las claves que empiezan por el prefijo
     async list({ prefix }) {
-      const r = await call(`${base}?select=key&key=gte.${encodeURIComponent(`"${prefix}"`)}&key=lt.${encodeURIComponent(`"${prefix}\uffff"`)}&order=key&limit=5000`);
-      return { blobs: (await r.json()).map((x) => ({ key: x.key })) };
+      // Supabase devuelve como mucho 1000 filas por petición: se pide por páginas
+      const blobs = [];
+      for (let off = 0; ; off += 1000) {
+        const r = await call(`${base}?select=key&key=gte.${encodeURIComponent(prefix)}&key=lt.${encodeURIComponent(prefix + "\uffff")}&order=key&limit=1000&offset=${off}`);
+        const rows = await r.json();
+        blobs.push(...rows.map((x) => ({ key: x.key })));
+        if (rows.length < 1000) return { blobs };
+      }
     },
   };
   return db;
 }
 let pg;
 // getStore se crea al usarlo (dentro de una petición), como pide Netlify
-const raw = new Proxy({}, { get: (_, p) => { const s = process.env.SUPABASE_URL ? (pg ||= pgStore()) : getStore({ name: "liga-kanto-global", consistency: "strong" }); const v = s[p]; return typeof v === "function" ? v.bind(s) : v; } });
+const raw = new Proxy({}, { get: (_, p) => {
+  if (!process.env.SUPABASE_URL !== !process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("Falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY: pon las dos (o ninguna)."); const s = process.env.SUPABASE_URL ? (pg ||= pgStore()) : getStore({ name: "liga-kanto-global", consistency: "strong" }); const v = s[p]; return typeof v === "function" ? v.bind(s) : v; } });
 
 // Cada petición trabaja dentro de una clase: sus claves van con el prefijo c/<clase>/ sin que el resto del código lo sepa.
 // Las cuentas de profes, las clases, el secreto y los límites de intentos son comunes.
@@ -296,7 +303,7 @@ async function restoreSnapshot(snap) {
   if (entries.length > 3000) return "La copia es demasiado grande.";
   const students = entries.filter(([k]) => k.startsWith("students/")).map(([, v]) => v);
   if (!students.length) return "La copia no tiene alumnos.";
-  if (entries.some(([k, v]) => k.startsWith("students/") && "students/" + v.id !== k)) return "La copia tiene alumnos dañados.";
+  if (entries.some(([k, v]) => k.startsWith("students/") && ("students/" + v.id !== k || !/^names\/[0-9a-f]{32}$/.test(v.nameKey)))) return "La copia tiene alumnos dañados.";
   // una reserva de nombre sin su alumno dejaría ese nombre bloqueado para siempre
   const used = new Set(students.map((x) => x.nameKey));
   entries = entries.filter(([k]) => !k.startsWith("names/") || used.has(k));
@@ -540,7 +547,7 @@ async function classHandler(req, context) {
     if (session.role === "student") {
       if (path === "/me" && method === "GET") {
         const s = await getStudent(session.sid);
-        return s ? json({ profile: await viewOf(s) }) : fail(404, "Perfil no encontrado.");
+        return s ? json({ profile: await viewOf(s) }) : fail(401, "Tu perfil ya no está en esta clase. Pide a tu profe el código de tu clase nueva.");
       }
       if (path === "/me" && method === "PUT") {
         const b = await readBody(req);
@@ -738,7 +745,7 @@ async function classHandler(req, context) {
         }
         if (typeof b.newPassword === "string" && b.newPassword.length) s.passHash = hashPw(b.newPassword);
         });
-        if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (oldKey) await store.delete(oldKey); }
+        if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (/^names\/[0-9a-f]{32}$/.test(oldKey)) await store.delete(oldKey); }
         return out instanceof Response ? out : json({ profile: teacherView(out) });
       }
       const q = path.match(/^\/teacher\/students\/([\w-]{1,60})\/(session|reward|bonus)$/);
@@ -804,7 +811,7 @@ async function classHandler(req, context) {
       }
       if (m && method === "DELETE") {
         const old = await getStudent(m[1]);
-        if (old?.nameKey) await store.delete(old.nameKey);
+        if (/^names\/[0-9a-f]{32}$/.test(old?.nameKey)) await store.delete(old.nameKey); // nunca una clave global
         await store.delete("students/" + m[1]);
         await store.delete("mail/" + m[1]);
         return json({ ok: true });
@@ -976,9 +983,10 @@ const accountView = (t) => ({ name: t.name, email: t.email, tutorialDone: !!t.tu
 async function updateRaw(key, fn) {
   for (let i = 0; i < 8; i++) {
     const cur = await raw.getWithMetadata(key, { type: "json" });
-    const next = await fn(cur ? cur.data : null);
+    if (!cur) return null; // solo actualiza: nunca resucita algo borrado
+    const next = await fn(cur.data);
     if (next === undefined) return null;
-    const r = await raw.setJSON(key, next, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
+    const r = await raw.setJSON(key, next, { onlyIfMatch: cur.etag });
     if (r?.modified !== false) return next;
     await new Promise((ok) => setTimeout(ok, 15 + Math.random() * 40 * (i + 1)));
   }
@@ -1088,21 +1096,23 @@ async function teacherAccount(req, path, method, ip, session) {
     if (cm[2] && method === "POST") {
       // código nuevo: el viejo deja de valer para entrar en la clase
       const code = await issueCode(cid);
-      await raw.delete("ccode/" + c.code);
-      const n = await updateRaw("classes/" + cid, (x) => ({ ...x, code }));
+      let old = null;
+      const n = await updateRaw("classes/" + cid, (x) => { old = x.code; return { ...x, code }; });
+      if (!n) { await raw.delete("ccode/" + code); return fail(404, "Clase no encontrada."); }
+      if (old) await raw.delete("ccode/" + old);
       return json({ class: await classView(n) });
     }
     if (!cm[2] && method === "PUT") {
       const f = classFields({ ...c, ...(await readBody(req)) });
       if (typeof f === "string") return fail(400, f);
       const n = await updateRaw("classes/" + cid, (x) => ({ ...x, ...f }));
-      return json({ class: await classView(n) });
+      return n ? json({ class: await classView(n) }) : fail(404, "Clase no encontrada.");
     }
     if (!cm[2] && method === "DELETE") {
       await updateRaw("teachers/" + tid, (x) => ({ ...x, classes: x.classes.filter((y) => y !== cid) }));
-      await raw.delete("ccode/" + c.code);
-      await raw.delete("classes/" + cid);
       await deleteClassData(cid);
+      await raw.delete("ccode/" + ((await getClass(cid))?.code || c.code));
+      await raw.delete("classes/" + cid);
       return json({ ok: true });
     }
   }
@@ -1112,13 +1122,27 @@ async function teacherAccount(req, path, method, ip, session) {
     if (!mine(b.from) || !mine(b.to) || b.from === b.to) return fail(400, "Elige otra clase tuya.");
     if (!/^[\w-]{1,60}$/.test(String(b.id))) return fail(400, "Alumno no válido.");
     const src = `c/${b.from}/`, dst = `c/${b.to}/`;
-    const s = await raw.get(src + "students/" + b.id, { type: "json" });
-    if (!s) return fail(404, "Alumno no encontrado.");
-    if ((await raw.setJSON(dst + s.nameKey, { t: Date.now() }, { onlyIfNew: true }))?.modified === false) return fail(409, "En la otra clase ya hay un alumno con ese nombre. Cámbiale el nombre antes.");
-    const mail = await raw.get(src + "mail/" + b.id, { type: "json" });
-    const c = await getClass(b.to);
-    await raw.setJSON(dst + "students/" + b.id, { ...s, school: c?.school || s.school });
-    if (mail) await raw.setJSON(dst + "mail/" + b.id, mail);
+    let cur = await raw.getWithMetadata(src + "students/" + b.id, { type: "json" });
+    if (!cur) return fail(404, "Alumno no encontrado.");
+    const s0 = cur.data;
+    if ((await raw.setJSON(dst + s0.nameKey, { t: Date.now() }, { onlyIfNew: true }))?.modified === false) return fail(409, "En la otra clase ya hay un alumno con ese nombre. Cámbiale el nombre antes.");
+    try {
+      const c = await getClass(b.to);
+      // si el alumno cambia algo mientras se copia, se vuelve a copiar
+      for (let i = 0; ; i++) {
+        const mail = await raw.get(src + "mail/" + b.id, { type: "json" });
+        await raw.setJSON(dst + "students/" + b.id, { ...cur.data, school: c?.school || cur.data.school });
+        if (mail) await raw.setJSON(dst + "mail/" + b.id, mail);
+        const again = await raw.getWithMetadata(src + "students/" + b.id, { type: "json" });
+        if (!again || again.etag === cur.etag || i >= 4) break;
+        cur = again;
+      }
+    } catch (e) {
+      await raw.delete(dst + "students/" + b.id).catch(() => {});
+      await raw.delete(dst + s0.nameKey).catch(() => {});
+      throw e;
+    }
+    const s = s0;
     await Promise.all([raw.delete(src + "students/" + b.id), raw.delete(src + "mail/" + b.id), raw.delete(src + s.nameKey)]);
     return json({ ok: true });
   }
@@ -1144,7 +1168,9 @@ export default async (req, context) => {
     // el resto de rutas son de una clase: la del código (entrar y registrarse), la del token (alumno) o la elegida por el profe
     let cid;
     if (path === "/public" || path === "/register" || path === "/login") {
+      // probar códigos al azar sale caro: 30 códigos malos por hora y red
       cid = await classByCode(url.searchParams.get("clase"));
+      if (!cid && !(await bump("ccbad:" + ip, 30, 60 * 60 * 1000))) return fail(429, "Demasiados códigos incorrectos. Inténtalo más tarde.");
       if (!cid) return fail(404, "No encuentro esa clase. Revisa el código que te dio tu profe.");
     } else if (tok?.role === "student") {
       cid = tok.cid;

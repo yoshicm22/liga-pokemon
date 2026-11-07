@@ -57,6 +57,9 @@ assert.ok(Object.keys(snap.data).every((k) => !k.startsWith("c/")));
 assert.equal((await call("/teacher/backups", "GET", null, A, c4.id)).j.backups.length, 1);
 const c6 = (await call("/teacher/classes", "POST", { grade: 6, group: "A", school: "CEIP Kanto" }, A)).j.class;
 assert.equal((await call("/teacher/restore", "POST", { snapshot: snap }, A, c6.id)).s, 200);
+// una copia trucada no puede apuntar a claves globales (p. ej. el secreto de sesión)
+const evil = { app: "liga-kanto", v: 1, data: { "students/x": { id: "x", name: "X", nameKey: "meta/secret" } } };
+assert.equal((await call("/teacher/restore", "POST", { snapshot: evil }, A, c6.id)).s, 400);
 assert.equal((await call("/teacher/students", "GET", null, A, c6.id)).j.students.length, 2);
 assert.equal((await call("/teacher/students", "GET", null, A, c4.id)).j.students.length, 2);
 // recuperar la contraseña cierra las sesiones abiertas
