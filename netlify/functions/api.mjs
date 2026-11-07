@@ -752,6 +752,8 @@ async function classHandler(req, context) {
         if (typeof b.newPassword === "string" && b.newPassword.length) { s.passHash = hashPw(b.newPassword); s.pv = (s.pv || 0) + 1; }
         });
         if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (/^names\/[0-9a-f]{32}$/.test(oldKey)) await store.delete(oldKey); }
+        // el profe le da un código nuevo: fuera el bloqueo por intentos, para que el niño pueda entrar ya
+        if (!(out instanceof Response) && typeof b.newPassword === "string" && b.newPassword.length) await clearAttempts(`login:${m[1]}`);
         return out instanceof Response ? out : json({ profile: teacherView(out) });
       }
       const q = path.match(/^\/teacher\/students\/([\w-]{1,60})\/(session|reward|bonus)$/);
