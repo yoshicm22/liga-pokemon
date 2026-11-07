@@ -478,7 +478,7 @@ async function classHandler(req, context) {
         students: students.map((s) => ({ id: s.id, name: shortName(s.name), school: s.school, gender: s.gender, faction: s.faction, badges: s.badges || [] })),
         config: await getConfig(),
         factionTotals: factionTotals(students),
-        requiresCode: true,
+        class: await (async () => { const c = await getClass(scope.getStore()); return { grade: c.grade, group: c.group, school: c.school }; })(),
       });
     }
 
@@ -1050,7 +1050,7 @@ async function teacherAccount(req, path, method, ip, session) {
     await clearAttempts(`trec:${email}`);
     return json({ token: await teacherToken(t), teacher: accountView(t), recovery });
   }
-  if (!path.startsWith("/teacher/me") && !path.startsWith("/teacher/classes") && path !== "/teacher/move") return null;
+  if (path !== "/teacher/me" && !path.startsWith("/teacher/classes") && path !== "/teacher/move") return null;
   if (session?.role !== "teacher") return fail(401, "Sesión caducada. Vuelve a entrar.");
   const t = session.teacher, tid = t.id;
   const mine = (cid) => t.classes.includes(cid);

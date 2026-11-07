@@ -36,6 +36,7 @@ assert.equal((await call("/teacher/classes/" + c4.id, "DELETE", null, B)).s, 404
 assert.equal((await call("/teacher/move", "POST", { from: c4.id, to: c1.id, id: s1.profile.id }, A)).s, 400);
 // el token del alumno solo vale para su clase
 assert.equal((await call("/me", "GET", null, s1.token)).s, 200);
+assert.equal((await call("/teacher/messages", "GET", null, A, c4.id)).s, 200);
 // pasar a Lucía de 4ºA a 5ºB con todo su progreso
 await call("/teacher/students/" + s1.profile.id + "/bonus", "POST", { delta: 1 }, A, c4.id);
 assert.equal((await call("/teacher/move", "POST", { from: c4.id, to: c5.id, id: s1.profile.id }, A)).s, 200);
