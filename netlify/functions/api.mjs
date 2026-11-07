@@ -1,14 +1,78 @@
-// API de la Liga del Movimiento - Kanto (Netlify Functions v2 + Netlify Blobs)
+// API de la Liga del Movimiento - VERSIÓN GLOBAL (cualquier profe, varias clases de cualquier curso)
 // Variables de entorno en Netlify:
-//   TEACHER_PASSWORD  (obligatoria)  contraseña del panel del profesor
-//   CLASS_CODE        (opcional)     código que deben escribir los alumnos al registrarse
+//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  base de datos (tabla kv de supabase/kv.sql). Sin ellas usa Netlify Blobs.
 //   SESSION_SECRET    (opcional)     si no existe, se genera y se guarda sola
 
 import { getStore } from "@netlify/blobs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 
+/* ---------- almacén: Postgres (Supabase) con el mismo interfaz que Netlify Blobs ---------- */
+function pgStore() {
+  const base = process.env.SUPABASE_URL.replace(/\/+$/, "") + "/rest/v1/kv";
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const h = (extra) => ({ apikey: k, authorization: "Bearer " + k, "content-type": "application/json", ...extra });
+  const eq = (key) => "key=eq." + encodeURIComponent(`"${key}"`);
+  // cada escritura pone una versión nueva al azar: es el "etag" para escribir solo si nadie escribió entre medias
+  const ver = () => crypto.randomInt(1, 2 ** 47);
+  async function call(url, opt = {}) {
+    const r = await fetch(url, { ...opt, headers: h(opt.headers) });
+    if (!r.ok && r.status !== 409) throw new Error(`base de datos ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return r;
+  }
+  const db = {
+    async getWithMetadata(key) {
+      const [row] = await (await call(`${base}?select=value,ver&${eq(key)}`)).json();
+      return row ? { data: row.value, etag: String(row.ver) } : null;
+    },
+    async get(key) { return (await db.getWithMetadata(key))?.data ?? null; },
+    async set(key, v, o) { return db.setJSON(key, v, o); },
+    async setJSON(key, value, o = {}) {
+      if (o.onlyIfNew) {
+        const r = await call(base, { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify({ key, value, ver: ver() }) });
+        return { modified: r.status !== 409 };
+      }
+      if (o.onlyIfMatch) {
+        const r = await call(`${base}?${eq(key)}&ver=eq.${encodeURIComponent(o.onlyIfMatch)}`, { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify({ value, ver: ver() }) });
+        return { modified: (await r.json()).length > 0 };
+      }
+      await call(`${base}?on_conflict=key`, { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ key, value, ver: ver() }) });
+      return { modified: true };
+    },
+    async delete(key) { await call(`${base}?${eq(key)}`, { method: "DELETE" }); },
+    // la columna key usa collate "C": el rango [prefijo, prefijo+U+FFFF) son justo las claves que empiezan por el prefijo
+    async list({ prefix }) {
+      const r = await call(`${base}?select=key&key=gte.${encodeURIComponent(`"${prefix}"`)}&key=lt.${encodeURIComponent(`"${prefix}\uffff"`)}&order=key&limit=5000`);
+      return { blobs: (await r.json()).map((x) => ({ key: x.key })) };
+    },
+  };
+  return db;
+}
+let pg;
 // getStore se crea al usarlo (dentro de una petición), como pide Netlify
-const store = new Proxy({}, { get: (_, p) => { const s = getStore({ name: "liga-kanto", consistency: "strong" }); const v = s[p]; return typeof v === "function" ? v.bind(s) : v; } });
+const raw = new Proxy({}, { get: (_, p) => { const s = process.env.SUPABASE_URL ? (pg ||= pgStore()) : getStore({ name: "liga-kanto-global", consistency: "strong" }); const v = s[p]; return typeof v === "function" ? v.bind(s) : v; } });
+
+// Cada petición trabaja dentro de una clase: sus claves van con el prefijo c/<clase>/ sin que el resto del código lo sepa.
+// Las cuentas de profes, las clases, el secreto y los límites de intentos son comunes.
+const scope = new AsyncLocalStorage();
+const GLOBAL_KEY = /^(meta\/secret$|rl\/|teachers\/|temail\/|classes\/|ccode\/)/;
+const pre = (k) => {
+  if (GLOBAL_KEY.test(k)) return k;
+  const c = scope.getStore();
+  if (!c) throw new Error("clave de clase sin clase: " + k);
+  return `c/${c}/${k}`;
+};
+const store = {
+  get: (k, o) => raw.get(pre(k), o),
+  getWithMetadata: (k, o) => raw.getWithMetadata(pre(k), o),
+  set: (k, v, o) => raw.set(pre(k), v, o),
+  setJSON: (k, v, o) => raw.setJSON(pre(k), v, o),
+  delete: (k) => raw.delete(pre(k)),
+  async list({ prefix }) {
+    const p = pre(prefix), cut = p.length - prefix.length;
+    return { blobs: (await raw.list({ prefix: p })).blobs.map((b) => ({ key: b.key.slice(cut) })) };
+  },
+};
 
 const FACTIONS = ["Rayo", "Cascada", "Roca"];
 const STUDENT_TTL = 3 * 60 * 60 * 1000;
@@ -218,7 +282,8 @@ async function saveBackup(name) {
   const drop = [...daily.slice(0, Math.max(0, daily.length - BACKUP_KEEP)), ...undo.slice(0, Math.max(0, undo.length - UNDO_KEEP))];
   await Promise.all(drop.map((n) => store.delete("backups/" + n)));
 }
-// una copia al día, la primera vez que el profe entra
+// una copia al día por clase, la primera vez que el profe la abre
+const backupDone = new Map(); // clase -> día ya copiado (en esta instancia de la función)
 async function dailyBackup() {
   const day = madridDay(Date.now());
   if (!(await backupList()).includes(day)) await saveBackup(day);
@@ -399,7 +464,7 @@ const EVAL_KEEP = 60;
 const face = (v) => Number.isInteger(v) && v >= 1 && v <= 3;
 
 /* ---------- manejador ---------- */
-export default async (req, context) => {
+async function classHandler(req, context) {
   try {
     const url = new URL(req.url);
     const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/";
@@ -419,9 +484,7 @@ export default async (req, context) => {
 
     if (method === "POST" && path === "/register") {
       const b = await readBody(req);
-      if (!process.env.CLASS_CODE) return fail(503, "Falta configurar CLASS_CODE en Netlify (código de clase para registrarse).");
       if (!(await bump("reg:" + ip, 60, 60 * 60 * 1000))) return fail(429, "Demasiados registros desde esta red. Inténtalo más tarde.");
-      if (!safeEqual(b.classCode ?? "", process.env.CLASS_CODE)) return fail(403, "Código de clase incorrecto.");
       const name = clean(b.name, 30);
       const password = String(b.password ?? "");
       if (name.length < 2) return fail(400, "Escribe tu nombre (mínimo 2 letras).");
@@ -437,7 +500,7 @@ export default async (req, context) => {
       const profile = {
         id: "student_" + crypto.randomBytes(8).toString("hex"),
         name,
-        school: clean(b.school, 40) || "Colegio Kanto",
+        school: clean(b.school, 40) || (await getClass(scope.getStore()))?.school || "",
         gender: b.gender === "girl" ? "girl" : "boy",
         faction: FACTIONS.includes(b.faction) ? b.faction : "Rayo",
         passHash: hashPw(password),
@@ -448,7 +511,7 @@ export default async (req, context) => {
         createdAt: Date.now(), nameKey,
       };
       await putStudent(profile);
-      const token = await sign({ role: "student", sid: profile.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
+      const token = await sign({ role: "student", sid: profile.id, cid: scope.getStore(), ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
       return json({ token, profile: await viewOf(profile) }, 201);
     }
 
@@ -465,21 +528,8 @@ export default async (req, context) => {
       if (!a1.ok) return fail(429, `Demasiados intentos con este perfil. Espera ${a1.mins} min.`);
       if (!checkPw(b.password ?? "", s.passHash)) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!");
       await clearAttempts(`login:${id}`);
-      const token = await sign({ role: "student", sid: s.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
+      const token = await sign({ role: "student", sid: s.id, cid: scope.getStore(), ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
       return json({ token, profile: await viewOf(s) });
-    }
-
-    if (method === "POST" && path === "/teacher/login") {
-      const b = await readBody(req);
-      if (!process.env.TEACHER_PASSWORD) return fail(503, "Falta configurar TEACHER_PASSWORD en Netlify.");
-      // por IP y sin tope global (un tope global dejaba fuera al profesor con unos pocos intentos anónimos)
-      const a1 = await attempt(`teacher:${ip}`, 10, 5 * 60 * 1000, 2 * 60 * 1000);
-      if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
-      if (!safeEqual(b.password ?? "", process.env.TEACHER_PASSWORD)) return fail(401, "Contraseña incorrecta.");
-      await clearAttempts(`teacher:${ip}`);
-      // si la copia falla, el profe entra igual
-      try { await dailyBackup(); } catch (e) { console.error("copia diaria", e); }
-      return json({ token: await sign({ role: "teacher", exp: Date.now() + TEACHER_TTL }) });
     }
 
     /* --- a partir de aquí hace falta sesión --- */
@@ -645,6 +695,10 @@ export default async (req, context) => {
     /* --- profesor --- */
     if (session.role === "teacher") {
       if (path === "/teacher/students" && method === "GET") {
+        // la primera vez al día que se abre la clase se guarda una copia; si falla, se sigue igual
+        if (backupDone.get(scope.getStore()) !== madridDay(Date.now())) {
+          try { await dailyBackup(); backupDone.set(scope.getStore(), madridDay(Date.now())); } catch (e) { console.error("copia diaria", e); }
+        }
         return json({ students: (await allStudents()).map(teacherView), config: await getConfig(), attClosed: await getAttClosed(), units: (await getUnits()).list });
       }
       const m = path.match(/^\/teacher\/students\/([\w-]{1,60})$/);
@@ -903,6 +957,207 @@ export default async (req, context) => {
     if (e?.status === 400) return fail(400, "Petición no válida.");
     console.error(e);
     if (String(e?.message).startsWith("conflicto")) return fail(503, "Hay mucha actividad, inténtalo otra vez.");
+    return fail(500, "Error del servidor.");
+  }
+}
+
+/* ---------- profes y clases (comunes a todas las clases) ---------- */
+const GRADES = [1, 2, 3, 4, 5, 6];
+const CODE_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const newCode = (n) => Array.from({ length: n }, () => CODE_ABC[crypto.randomInt(CODE_ABC.length)]).join("");
+const emailKey = (e) => "temail/" + sha(e).slice(0, 40);
+const emailOk = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e);
+const getTeacher = (tid) => raw.get("teachers/" + tid, { type: "json" });
+const getClass = (cid) => (cid ? raw.get("classes/" + cid, { type: "json" }) : null);
+const classView = async (c) => ({ id: c.id, grade: c.grade, group: c.group, school: c.school, code: c.code, students: (await raw.list({ prefix: `c/${c.id}/students/` })).blobs.length });
+const classByCode = async (code) => (await raw.get("ccode/" + String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8), { type: "json" }))?.cid || null;
+const accountView = (t) => ({ name: t.name, email: t.email, tutorialDone: !!t.tutorialDone });
+// escritura atómica de una clave común (sin prefijo de clase)
+async function updateRaw(key, fn) {
+  for (let i = 0; i < 8; i++) {
+    const cur = await raw.getWithMetadata(key, { type: "json" });
+    const next = await fn(cur ? cur.data : null);
+    if (next === undefined) return null;
+    const r = await raw.setJSON(key, next, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
+    if (r?.modified !== false) return next;
+    await new Promise((ok) => setTimeout(ok, 15 + Math.random() * 40 * (i + 1)));
+  }
+  throw new Error("conflicto de escritura en " + key);
+}
+const classFields = (b) => {
+  const grade = Number(b.grade), group = clean(b.group, 10).toUpperCase(), school = clean(b.school, 60);
+  if (!GRADES.includes(grade)) return "Elige un curso de 1º a 6º.";
+  if (!group) return "Escribe el grupo (por ejemplo A).";
+  if (school.length < 2) return "Escribe el nombre del colegio.";
+  return { grade, group, school };
+};
+async function issueCode(cid) {
+  for (;;) {
+    const code = newCode(6);
+    if ((await raw.setJSON("ccode/" + code, { cid }, { onlyIfNew: true }))?.modified !== false) return code;
+  }
+}
+const teacherToken = async (t) => sign({ role: "teacher", tid: t.id, tv: t.tv || 0, exp: Date.now() + TEACHER_TTL });
+const recoveryCode = () => newCode(4) + "-" + newCode(4) + "-" + newCode(4);
+async function deleteClassData(cid) {
+  const { blobs } = await raw.list({ prefix: `c/${cid}/` });
+  await Promise.all(blobs.map((b) => raw.delete(b.key)));
+}
+
+// rutas de cuenta del profe y de sus clases; devuelve null si la ruta no es de aquí
+async function teacherAccount(req, path, method, ip, session) {
+  if (method === "POST" && path === "/teacher/register") {
+    const b = await readBody(req);
+    if (!(await bump("treg:" + ip, 5, 60 * 60 * 1000))) return fail(429, "Demasiadas cuentas nuevas desde esta red. Inténtalo más tarde.");
+    const name = clean(b.name, 60), email = clean(b.email, 254).toLowerCase(), pw = String(b.password ?? "");
+    if (name.length < 2) return fail(400, "Escribe tu nombre.");
+    if (!emailOk(email)) return fail(400, "Escribe un correo válido.");
+    if (pw.length < 8 || pw.length > 200) return fail(400, "La contraseña debe tener al menos 8 caracteres.");
+    const t = { id: "t_" + crypto.randomBytes(8).toString("hex"), name, email, passHash: hashPw(pw), classes: [], tv: 0, createdAt: Date.now() };
+    const recovery = recoveryCode();
+    t.recHash = hashPw(recovery);
+    if ((await raw.setJSON(emailKey(email), { tid: t.id }, { onlyIfNew: true }))?.modified === false) return fail(409, "Ya hay una cuenta con ese correo. Entra o recupera la contraseña.");
+    await raw.setJSON("teachers/" + t.id, t);
+    return json({ token: await teacherToken(t), teacher: accountView(t), classes: [], recovery }, 201);
+  }
+  if (method === "POST" && path === "/teacher/login") {
+    const b = await readBody(req);
+    const email = clean(b.email, 254).toLowerCase();
+    const a1 = await attempt(`teacher:${ip}`, 20, 5 * 60 * 1000, 2 * 60 * 1000);
+    if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
+    const a2 = await attempt(`tmail:${email}`, 10, 5 * 60 * 1000, 5 * 60 * 1000);
+    if (!a2.ok) return fail(429, `Demasiados intentos con esta cuenta. Espera ${a2.mins} min.`);
+    const tid = (await raw.get(emailKey(email), { type: "json" }))?.tid;
+    const t = tid ? await getTeacher(tid) : null;
+    if (!t || !checkPw(b.password ?? "", t.passHash)) return fail(401, "Correo o contraseña incorrectos.");
+    await clearAttempts(`tmail:${email}`);
+    const classes = (await Promise.all(t.classes.map(getClass))).filter(Boolean);
+    return json({ token: await teacherToken(t), teacher: accountView(t), classes: await Promise.all(classes.map(classView)) });
+  }
+  if (method === "POST" && path === "/teacher/recover") {
+    const b = await readBody(req);
+    const email = clean(b.email, 254).toLowerCase(), pw = String(b.password ?? "");
+    const a1 = await attempt(`trec:${email}`, 5, 15 * 60 * 1000, 15 * 60 * 1000);
+    if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
+    if (pw.length < 8 || pw.length > 200) return fail(400, "La contraseña nueva debe tener al menos 8 caracteres.");
+    const tid = (await raw.get(emailKey(email), { type: "json" }))?.tid;
+    const t0 = tid ? await getTeacher(tid) : null;
+    const code = clean(b.recovery, 20).toUpperCase();
+    if (!t0 || !checkPw(code, t0.recHash)) return fail(401, "Correo o código de recuperación incorrectos.");
+    // contraseña nueva y código de recuperación nuevo; las sesiones abiertas se cierran
+    const recovery = recoveryCode();
+    const t = await updateRaw("teachers/" + tid, (x) => ({ ...x, passHash: hashPw(pw), recHash: hashPw(recovery), tv: (x.tv || 0) + 1 }));
+    await clearAttempts(`trec:${email}`);
+    return json({ token: await teacherToken(t), teacher: accountView(t), recovery });
+  }
+  if (!path.startsWith("/teacher/me") && !path.startsWith("/teacher/classes") && path !== "/teacher/move") return null;
+  if (session?.role !== "teacher") return fail(401, "Sesión caducada. Vuelve a entrar.");
+  const t = session.teacher, tid = t.id;
+  const mine = (cid) => t.classes.includes(cid);
+
+  if (path === "/teacher/me" && method === "GET") {
+    const classes = (await Promise.all(t.classes.map(getClass))).filter(Boolean);
+    return json({ teacher: accountView(t), classes: await Promise.all(classes.map(classView)) });
+  }
+  if (path === "/teacher/me" && method === "PUT") {
+    const b = await readBody(req);
+    const out = await updateRaw("teachers/" + tid, (x) => {
+      if (typeof b.tutorialDone === "boolean") x.tutorialDone = b.tutorialDone;
+      if ("name" in b && clean(b.name, 60).length >= 2) x.name = clean(b.name, 60);
+      return x;
+    });
+    return json({ teacher: accountView(out) });
+  }
+  if (path === "/teacher/classes" && method === "POST") {
+    const b = await readBody(req);
+    const f = classFields(b);
+    if (typeof f === "string") return fail(400, f);
+    if (t.classes.length >= 30) return fail(400, "Has llegado al máximo de 30 clases.");
+    const id = "c_" + crypto.randomBytes(6).toString("hex");
+    const c = { id, tid, ...f, code: await issueCode(id), createdAt: Date.now() };
+    await raw.setJSON("classes/" + id, c);
+    await updateRaw("teachers/" + tid, (x) => ({ ...x, classes: [...x.classes, id] }));
+    return json({ class: await classView(c) }, 201);
+  }
+  const cm = path.match(/^\/teacher\/classes\/(c_[a-f0-9]{12})(\/code)?$/);
+  if (cm) {
+    const cid = cm[1];
+    if (!mine(cid)) return fail(404, "Clase no encontrada.");
+    const c = await getClass(cid);
+    if (!c) return fail(404, "Clase no encontrada.");
+    if (cm[2] && method === "POST") {
+      // código nuevo: el viejo deja de valer para entrar en la clase
+      const code = await issueCode(cid);
+      await raw.delete("ccode/" + c.code);
+      const n = await updateRaw("classes/" + cid, (x) => ({ ...x, code }));
+      return json({ class: await classView(n) });
+    }
+    if (!cm[2] && method === "PUT") {
+      const f = classFields({ ...c, ...(await readBody(req)) });
+      if (typeof f === "string") return fail(400, f);
+      const n = await updateRaw("classes/" + cid, (x) => ({ ...x, ...f }));
+      return json({ class: await classView(n) });
+    }
+    if (!cm[2] && method === "DELETE") {
+      await updateRaw("teachers/" + tid, (x) => ({ ...x, classes: x.classes.filter((y) => y !== cid) }));
+      await raw.delete("ccode/" + c.code);
+      await raw.delete("classes/" + cid);
+      await deleteClassData(cid);
+      return json({ ok: true });
+    }
+  }
+  // pasar un alumno a otra clase del mismo profe (por ejemplo al cambiar de curso); se lleva todo su progreso y su buzón
+  if (path === "/teacher/move" && method === "POST") {
+    const b = await readBody(req);
+    if (!mine(b.from) || !mine(b.to) || b.from === b.to) return fail(400, "Elige otra clase tuya.");
+    if (!/^[\w-]{1,60}$/.test(String(b.id))) return fail(400, "Alumno no válido.");
+    const src = `c/${b.from}/`, dst = `c/${b.to}/`;
+    const s = await raw.get(src + "students/" + b.id, { type: "json" });
+    if (!s) return fail(404, "Alumno no encontrado.");
+    if ((await raw.setJSON(dst + s.nameKey, { t: Date.now() }, { onlyIfNew: true }))?.modified === false) return fail(409, "En la otra clase ya hay un alumno con ese nombre. Cámbiale el nombre antes.");
+    const mail = await raw.get(src + "mail/" + b.id, { type: "json" });
+    const c = await getClass(b.to);
+    await raw.setJSON(dst + "students/" + b.id, { ...s, school: c?.school || s.school });
+    if (mail) await raw.setJSON(dst + "mail/" + b.id, mail);
+    await Promise.all([raw.delete(src + "students/" + b.id), raw.delete(src + "mail/" + b.id), raw.delete(src + s.nameKey)]);
+    return json({ ok: true });
+  }
+  return fail(404, "No encontrado.");
+}
+
+export default async (req, context) => {
+  try {
+    const url = new URL(req.url);
+    const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/";
+    const method = req.method;
+    const ip = context?.ip || req.headers.get("x-nf-client-connection-ip") || "0.0.0.0";
+    const h = req.headers.get("authorization") || "";
+    const tok = await verify(h.startsWith("Bearer ") ? h.slice(7) : "");
+    let session = null;
+    if (tok?.role === "teacher") {
+      const t = await getTeacher(tok.tid);
+      if (t && (t.tv || 0) === tok.tv) session = { ...tok, teacher: t };
+    }
+    const acc = await teacherAccount(req, path, method, ip, session);
+    if (acc) return acc;
+
+    // el resto de rutas son de una clase: la del código (entrar y registrarse), la del token (alumno) o la elegida por el profe
+    let cid;
+    if (path === "/public" || path === "/register" || path === "/login") {
+      cid = await classByCode(url.searchParams.get("clase"));
+      if (!cid) return fail(404, "No encuentro esa clase. Revisa el código que te dio tu profe.");
+    } else if (tok?.role === "student") {
+      cid = tok.cid;
+    } else if (session) {
+      cid = req.headers.get("x-class");
+      if (!session.teacher.classes.includes(cid)) return fail(400, "Elige una de tus clases.");
+    } else return fail(401, "Sesión caducada. Vuelve a entrar.");
+    if (!(await getClass(cid))) return fail(404, "Esta clase ya no existe.");
+    return await scope.run(cid, () => classHandler(req, context));
+  } catch (e) {
+    if (e?.status === 413) return fail(413, "Petición demasiado grande.");
+    if (e?.status === 400) return fail(400, "Petición no válida.");
+    console.error(e);
     return fail(500, "Error del servidor.");
   }
 };
