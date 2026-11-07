@@ -44,9 +44,9 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(x, y);
 }
 
-async function readBody(req) {
+async function readBody(req, max = MAX_BODY) {
   const text = await req.text();
-  if (text.length > MAX_BODY) throw Object.assign(new Error("big"), { status: 413 });
+  if (text.length > max) throw Object.assign(new Error("big"), { status: 413 });
   if (!text) return {};
   try { const v = JSON.parse(text); return isObj(v) ? v : {}; }
   catch { throw Object.assign(new Error("bad"), { status: 400 }); }
@@ -197,6 +197,53 @@ function factionTotals(students) {
     for (const g of s.gymSessionsData || []) if (Array.isArray(g)) t[f] += g.filter(Boolean).length;
   }
   return t;
+}
+
+/* ---------- copias de seguridad ---------- */
+// todo lo de la clase; quedan fuera el secreto, la sesión (epoch), los límites de intentos y las propias copias
+const BACKUP_PREFIXES = ["students/", "names/", "mail/", "config/", "board/", "meta/units", "meta/att-closed"];
+const BACKUP_KEEP = 14; // copias diarias
+const UNDO_KEEP = 5; // copias "antes de restaurar"
+const isDaily = (n) => /^\d{4}-\d{2}-\d{2}$/.test(n);
+const backupKeyOk = (k) => /^[\w/-]{1,120}$/.test(k) && BACKUP_PREFIXES.some((p) => k.startsWith(p));
+async function snapshot() {
+  const keys = (await Promise.all(BACKUP_PREFIXES.map((prefix) => store.list({ prefix })))).flatMap((r) => r.blobs.map((b) => b.key));
+  const data = Object.fromEntries(await Promise.all(keys.map(async (k) => [k, await store.get(k, { type: "json" })])));
+  return { app: "liga-kanto", v: 1, at: Date.now(), data };
+}
+const backupList = async () => (await store.list({ prefix: "backups/" })).blobs.map((b) => b.key.slice(8)).sort();
+async function saveBackup(name) {
+  await store.setJSON("backups/" + name, await snapshot());
+  const all = await backupList(), daily = all.filter(isDaily), undo = all.filter((n) => !isDaily(n));
+  const drop = [...daily.slice(0, Math.max(0, daily.length - BACKUP_KEEP)), ...undo.slice(0, Math.max(0, undo.length - UNDO_KEEP))];
+  await Promise.all(drop.map((n) => store.delete("backups/" + n)));
+}
+// una copia al día, la primera vez que el profe entra
+async function dailyBackup() {
+  const day = madridDay(Date.now());
+  if (!(await backupList()).includes(day)) await saveBackup(day);
+}
+// sustituye los datos de la clase por los de la copia; antes guarda cómo estaba todo por si hay que volver atrás
+async function restoreSnapshot(snap) {
+  if (snap?.app !== "liga-kanto" || !isObj(snap.data)) return "Esta copia no es de la Liga Kanto.";
+  const ok = (k, v) => v !== null && typeof v === "object" && (k === "meta/att-closed" ? Array.isArray(v) : isObj(v)) && (k !== "meta/units" || Array.isArray(v.list));
+  let entries = Object.entries(snap.data).filter(([k, v]) => backupKeyOk(k) && ok(k, v));
+  if (entries.length > 3000) return "La copia es demasiado grande.";
+  const students = entries.filter(([k]) => k.startsWith("students/")).map(([, v]) => v);
+  if (!students.length) return "La copia no tiene alumnos.";
+  if (entries.some(([k, v]) => k.startsWith("students/") && "students/" + v.id !== k)) return "La copia tiene alumnos dañados.";
+  // una reserva de nombre sin su alumno dejaría ese nombre bloqueado para siempre
+  const used = new Set(students.map((x) => x.nameKey));
+  entries = entries.filter(([k]) => !k.startsWith("names/") || used.has(k));
+  const hm = new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Madrid" }).replace(/:/g, "");
+  await saveBackup(madridDay(Date.now()) + "-antes-" + hm);
+  const now = (await snapshot()).data;
+  const keep = new Set(entries.map(([k]) => k));
+  // primero se escribe todo y después se borra lo que sobra: si se corta a medias, no falta nada de la copia
+  await Promise.all(entries.map(([k, v]) => store.setJSON(k, v)));
+  await Promise.all(Object.keys(now).filter((k) => !keep.has(k)).map((k) => store.delete(k)));
+  await update("meta/epoch", (e) => (e || 0) + 1); // los alumnos vuelven a entrar con los datos restaurados
+  return null;
 }
 
 /* ---------- unidades, cofres y consolación ---------- */
@@ -430,6 +477,8 @@ export default async (req, context) => {
       if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
       if (!safeEqual(b.password ?? "", process.env.TEACHER_PASSWORD)) return fail(401, "Contraseña incorrecta.");
       await clearAttempts(`teacher:${ip}`);
+      // si la copia falla, el profe entra igual
+      try { await dailyBackup(); } catch (e) { console.error("copia diaria", e); }
       return json({ token: await sign({ role: "teacher", exp: Date.now() + TEACHER_TTL }) });
     }
 
@@ -821,6 +870,18 @@ export default async (req, context) => {
         return json({ ok: true });
       }
       if (path === "/teacher/units" && method === "GET") return json(await getUnits());
+      if (path === "/teacher/backups" && method === "GET") return json({ backups: await backupList() });
+      if (path === "/teacher/backup" && method === "GET") return json(await snapshot());
+      if (path === "/teacher/restore" && method === "POST") {
+        const b = await readBody(req, 5_000_000);
+        let snap = b.snapshot;
+        if (typeof b.name === "string") {
+          if (!(await backupList()).includes(b.name)) return fail(404, "No encuentro esa copia.");
+          snap = await store.get("backups/" + b.name, { type: "json" });
+        }
+        const err = await restoreSnapshot(snap);
+        return err ? fail(400, err) : json({ ok: true, backups: await backupList() });
+      }
       if (path === "/teacher/end-class" && method === "POST") {
         await update("meta/epoch", (e) => (e || 0) + 1);
         return json({ ok: true });
