@@ -71,11 +71,13 @@ const cview=c=>({...cl(c),students:CLA[c.id].s.length});
 const ABC='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',rnd=n=>Array.from({length:n},()=>ABC[Math.floor(Math.random()*ABC.length)]).join('');
 const recov=()=>rnd(4)+'-'+rnd(4)+'-'+rnd(4);
 const cfields=x=>{const grade=Number(x.grade),group=String(x.group||'').trim().toUpperCase().slice(0,10),school=String(x.school||'').trim().slice(0,60);if(![1,2,3,4,5,6].includes(grade))return 'Elige un curso de 1º a 6º.';if(!group)return 'Escribe el grupo (por ejemplo A).';if(school.length<2)return 'Escribe el nombre del colegio.';return{grade,group,school};};
+// como nameKeyOf del servidor: sin acentos, sin mayúsculas y con los espacios juntos
+const nk=n=>String(n).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 const newCode=cid=>{let c;do c=rnd(6);while(CODES[c]);CODES[c]=cid;return c;};
 function account(p,m,b,t){
  const email=String(b.email||'').trim().toLowerCase(),pw=String(b.password||'');
  if(m==='POST'&&p==='/teacher/register'){const name=String(b.name||'').trim().slice(0,60);if(name.length<2)return E('Escribe tu nombre.',400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))return E('Escribe un correo válido.',400);if(pw.length<8)return E('La contraseña debe tener al menos 8 caracteres.',400);
-  if(TS.some(x=>x.email===email))return E('Ya hay una cuenta con ese correo. Entra o recupera la contraseña.',409);const n={id:'t_'+rnd(8).toLowerCase(),name,email,pw,rec:recov(),classes:[],tutorialDone:false,tv:0};TS.push(n);return R({token:ttok(n),teacher:tview(n),classes:[],recovery:n.rec},201);}
+  if(TS.some(x=>x.email===email))return E('No se ha podido crear la cuenta con ese correo. Si ya tienes una, entra o usa tu código de recuperación.',400);const n={id:'t_'+rnd(8).toLowerCase(),name,email,pw,rec:recov(),classes:[],tutorialDone:false,tv:0};TS.push(n);return R({token:ttok(n),teacher:tview(n),classes:[],recovery:n.rec},201);}
  if(m==='POST'&&p==='/teacher/login'){const n=TS.find(x=>x.email===email);if(!n||n.pw!==pw)return E('Correo o contraseña incorrectos. En la demo: demo@liga.es o maria@liga.es, contraseña demo1234.',401);return R({token:ttok(n),teacher:tview(n),classes:n.classes.map(c=>cview(CLS[c]))});}
  if(m==='POST'&&p==='/teacher/recover'){if(pw.length<8)return E('La contraseña nueva debe tener al menos 8 caracteres.',400);const n=TS.find(x=>x.email===email);if(!n||n.rec!==String(b.recovery||'').trim().toUpperCase())return E('Correo o código de recuperación incorrectos.',401);n.pw=pw;n.rec=recov();n.tv++;return R({token:ttok(n),teacher:tview(n),recovery:n.rec});}
  if(p!=='/teacher/me'&&!p.startsWith('/teacher/classes')&&p!=='/teacher/move')return null;
@@ -90,14 +92,18 @@ function account(p,m,b,t){
   if(!cm[2]&&m==='PUT'){const f=cfields({...c,...b});if(typeof f==='string')return E(f,400);Object.assign(c,f);return R({class:cview(c)});}
   if(!cm[2]&&m==='DELETE'){t.classes=t.classes.filter(x=>x!==id);delete CODES[c.code];delete CLS[id];delete CLA[id];return R({ok:true});}}
  if(p==='/teacher/move'&&m==='POST'){if(!t.classes.includes(b.from)||!t.classes.includes(b.to)||b.from===b.to)return E('Elige otra clase tuya.',400);const A=CLA[b.from],B=CLA[b.to],s=A.s.find(x=>x.id===b.id);if(!s)return E('Alumno no encontrado.',404);
-  if(B.s.some(x=>x.name.toLowerCase()===s.name.toLowerCase()))return E('En la otra clase ya hay un alumno con ese nombre. Cámbiale el nombre antes.',409);
+  if(B.s.some(x=>nk(x.name)===nk(s.name)))return E('En la otra clase ya hay un alumno con ese nombre. Cámbiale el nombre antes.',409);
   A.s=A.s.filter(x=>x!==s);s.school=CLS[b.to].school;B.s.push(s);if(A.mail&&A.mail[s.id]){B.mail=B.mail||{};B.mail[s.id]=A.mail[s.id];delete A.mail[s.id];}return R({ok:true});}
  return E('No encontrado.',404);
 }
 const real=window.fetch.bind(window);
 // la demo se guarda en este navegador; si el sandbox no deja usar localStorage, sigue en memoria
 const KEY='km-demo-global-v2';
-try{const z=JSON.parse(localStorage.getItem(KEY)||'null');if(z&&z.CLA&&z.CLS&&z.CODES&&Array.isArray(z.TS)){for(const o of [CLA,CLS,CODES])for(const k in o)delete o[k];Object.assign(CLA,z.CLA);Object.assign(CLS,z.CLS);Object.assign(CODES,z.CODES);TS.splice(0,TS.length,...z.TS);db=CLA.c_0000000004a0||Object.values(CLA)[0]||newDb([]);}}catch(e){}
+const INIT=JSON.stringify({CLA,CLS,CODES,TS});
+const load=z=>{if(z&&z.CLA&&z.CLS&&z.CODES&&Array.isArray(z.TS)){for(const o of [CLA,CLS,CODES])for(const k in o)delete o[k];Object.assign(CLA,z.CLA);Object.assign(CLS,z.CLS);Object.assign(CODES,z.CODES);TS.splice(0,TS.length,...z.TS);db=CLA.c_0000000004a0||Object.values(CLA)[0]||newDb([]);}};
+try{load(JSON.parse(localStorage.getItem(KEY)||'null'));}catch(e){}
+// «Reiniciar demo»: borra lo guardado (también la clase recordada) y recarga; si el sandbox no deja recargar, vuelve al estado inicial en memoria
+window.kmDemoReset=()=>{try{for(const k of Object.keys(localStorage))if(k.startsWith('km-'))localStorage.removeItem(k);}catch(e){}load(JSON.parse(INIT));me=null;try{location.reload();}catch(e){}};
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({CLA,CLS,CODES,TS}));}catch(e){}};
 window.fetch=(url,o={})=>String(url).startsWith('/api')?api(url,o).finally(save):real(url,o);
 const api=async(url,o={})=>{
@@ -114,7 +120,7 @@ const api=async(url,o={})=>{
  db=CLA[cid];CC=CLS[cid];if(!db)return E('Esta clase ya no existe.',404);
  if(m==='GET'&&p==='/public')return R({students:db.s.map(s=>({id:s.id,name:short(s.name),school:s.school,gender:s.gender,faction:s.faction,badges:s.badges})),config:db.cfg,factionTotals:tot(),class:{grade:CC.grade,group:CC.group,school:CC.school}});
  if(m==='POST'&&p==='/login'){const s=get(b.id);if(!s)return E('Código incorrecto. ¡Inténtalo otra vez!',401);return R({token:stok(s.id),profile:sv(s)});}
- if(m==='POST'&&p==='/register'){const n=String(b.name||'').trim().slice(0,30);if(n.length<2)return E('Escribe tu nombre (mínimo 2 letras).',400);if(db.s.some(x=>x.name.toLowerCase()===n.toLowerCase()))return E('Ya existe un alumno con ese nombre. Añade tu inicial o apellido.',409);
+ if(m==='POST'&&p==='/register'){const n=String(b.name||'').trim().slice(0,30);if(n.length<2)return E('Escribe tu nombre (mínimo 2 letras).',400);if(db.s.some(x=>nk(x.name)===nk(n)))return E('Ya existe un alumno con ese nombre. Añade tu inicial o apellido.',409);
   const s=mkS(n,b.gender,b.faction,CC.school);db.s.push(s);return R({token:stok(s.id),profile:sv(s)},201);}
  if(m==='GET'&&p==='/teacher/backups')return R({backups:Object.keys(bk()).sort()});
  if(m==='GET'&&p==='/teacher/backup')return R(snap());
@@ -414,6 +420,12 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
   /* Aviso DEMO: tras entrar, solo una etiqueta pequeña que no tapa la misión */
   html body:has(.km-tabbar, .km-profe-tabs, #km-clases-t) .km-demo-badge { font-size: 0 !important; padding: 3px 8px !important; }
   html body:has(.km-tabbar, .km-profe-tabs, #km-clases-t) .km-demo-badge::before { content: "DEMO"; font-size: 11px; }
+  /* «Reiniciar demo»: solo en la portada (dentro, la etiqueta no debe tapar las pestañas); al menos 44px para el dedo */
+  html body .km-demo-reset { pointer-events: auto; min-height: 44px; margin-left: 6px; padding: 0 14px; border: 0; border-radius: 999px; background: #1c1917; color: #fff; font: 700 13px Nunito, sans-serif; cursor: pointer; }
+  html body .km-demo-reset:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px #1c1917; }
+  html body:has(.km-tabbar, .km-profe-tabs, #km-clases-t) .km-demo-reset { display: none; }
+  /* mientras se ve la etiqueta grande, sitio debajo para que se pueda bajar el contenido y no quede tapado */
+  html body:not(:has(.km-tabbar, .km-profe-tabs, #km-clases-t)), html body:not(:has(.km-tabbar, .km-profe-tabs, #km-clases-t)) .fixed.overflow-y-auto { padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px)); }
   /* Premios: el saldo se queda arriba al bajar (la cabecera ya no es fija) */
   html body .km-saldo { position: sticky; top: 0; z-index: 30; background: var(--kanto-navy); padding: .625rem .875rem; border-radius: var(--kanto-r-btn); border: 2px solid var(--kanto-gold); box-shadow: 0 4px 0 rgba(0,0,0,.3); }
   /* Que el foco no quede tapado por el saldo fijo de arriba ni por la barra de pestañas de abajo */
@@ -3506,12 +3518,10 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.classBusy = true; this.classFormMsg = ''; this.classFormOk = '';
                     try {
                         const d = await this.api('/teacher/classes', 'POST', { grade: f.grade, group: f.group.trim(), school: f.school.trim() });
-                        const primera = !this.teacherClasses.length;
                         this.teacherClasses = [...this.teacherClasses, d.class];
                         f.group = '';
                         this.playSound('token');
-                        if (primera) await this.chooseClass(d.class.id);
-                        else this.classFormOk = 'Clase creada: ' + this.claseTitle(d.class, ' ') + '. Ya puedes abrirla en la lista.';
+                        await this.chooseClass(d.class.id);
                     } catch (e) { this.classFormMsg = e.message; }
                     finally { this.classBusy = false; }
                 },
@@ -4730,5 +4740,5 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
         </div>
     </template>
 </div>
-<div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:5px 10px;border-radius:999px;opacity:.92">DEMO GLOBAL · profes: <b>demo@liga.es</b> o <b>maria@liga.es</b> (contraseña demo1234) · clases: KANTO4, KANTO6, JOHTO2 · alumnos: 3 emojis cualquiera</div>
+<div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:5px 10px;border-radius:999px;opacity:.92">DEMO GLOBAL · profes: <b>demo@liga.es</b> o <b>maria@liga.es</b> (contraseña demo1234) · clases: KANTO4, KANTO6, JOHTO2 · alumnos: 3 emojis cualquiera <button type="button" class="km-demo-reset" onclick="kmDemoReset()">Reiniciar demo</button></div>
 </body></html>

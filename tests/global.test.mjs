@@ -5,15 +5,16 @@ const src = new URL("../netlify/functions/api.mjs", import.meta.url), tmp = new 
 writeFileSync(tmp, readFileSync(src, "utf8").replace('"@netlify/blobs"', '"./blobs-memoria.mjs"'));
 const { default: h } = await import(tmp.href); const { mem } = await import("./blobs-memoria.mjs");
 
-const call = async (path, method = "GET", body, tok, cls) => {
+const call = async (path, method = "GET", body, tok, cls, ip = "1.1.1.1") => {
   const headers = {}; if (tok) headers.authorization = "Bearer " + tok; if (cls) headers["x-class"] = cls;
-  const r = await h(new Request("http://x/api" + path, { method, headers, body: body ? JSON.stringify(body) : undefined }), { ip: "1.1.1.1" });
+  const r = await h(new Request("http://x/api" + path, { method, headers, body: body ? JSON.stringify(body) : undefined }), { ip });
   return { s: r.status, j: await r.json() };
 };
 // dos profes; cada uno solo ve lo suyo
 const a = await call("/teacher/register", "POST", { name: "Ana", email: "Ana@cole.es", password: "contraseña1" });
 assert.equal(a.s, 201, JSON.stringify(a.j)); assert.match(a.j.recovery, /^\w{4}-\w{4}-\w{4}$/);
-assert.equal((await call("/teacher/register", "POST", { name: "Otra", email: "ana@cole.es", password: "contraseña1" })).s, 409);
+const dup = await call("/teacher/register", "POST", { name: "Otra", email: "ana@cole.es", password: "contraseña1" });
+assert.equal(dup.s, 400); assert.doesNotMatch(dup.j.error || JSON.stringify(dup.j), /Ya hay/);
 const b = await call("/teacher/register", "POST", { name: "Benito", email: "beni@cole.es", password: "contraseña2" });
 const A = a.j.token, B = b.j.token;
 assert.equal((await call("/teacher/classes", "POST", { grade: 7, group: "A", school: "Cole" }, A)).s, 400);
@@ -75,4 +76,31 @@ assert.equal((await call("/teacher/classes/" + c6.id, "DELETE", null, A2)).s, 20
 assert.ok(![...mem.keys()].some((k) => k.startsWith(`c/${c6.id}/`)));
 assert.equal((await call("/public?clase=" + c6.code)).s, 404);
 assert.equal((await call("/teacher/me", "GET", null, A2)).j.classes.length, 2);
+// cambiar el código del alumno cierra sus sesiones abiertas
+const pab = (await call("/login?clase=" + c5.code, "POST", { id: s1.profile.id, password: "🐶🐱🐭" })).j.token;
+assert.equal((await call("/teacher/students/" + s1.profile.id, "PUT", { newPassword: "🐸🐵🐔" }, A2, c5.id)).s, 200);
+assert.equal((await call("/me", "GET", null, pab)).s, 401);
+assert.equal((await call("/me/self-eval", "POST", { effort: 1, fair: 1 }, pab)).s, 401);
+const pab2 = (await call("/login?clase=" + c5.code, "POST", { id: s1.profile.id, password: "🐸🐵🐔" })).j.token;
+assert.equal((await call("/me", "GET", null, pab2)).s, 200);
+// el bloqueo del alumno crece: 3 min, luego 6
+const wrong = () => call("/login?clase=" + c5.code, "POST", { id: s1.profile.id, password: "❌❌❌" });
+for (let i = 0; i < 10; i++) assert.equal((await wrong()).s, 401);
+let lk = await wrong(); assert.equal(lk.s, 429); assert.match(JSON.stringify(lk.j), /3 min/);
+const rlk = [...mem.keys()].find((k) => k.startsWith("rl/") && JSON.parse(mem.get(k).d).lv === 1);
+mem.set(rlk, { d: JSON.stringify({ ...JSON.parse(mem.get(rlk).d), until: Date.now() - 1 }), e: "x" });
+for (let i = 0; i < 10; i++) await wrong();
+lk = await wrong(); assert.equal(lk.s, 429); assert.match(JSON.stringify(lk.j), /6 min/);
+// los fallos de otro (otra IP) no dejan fuera al profe
+for (let i = 0; i < 12; i++) await call("/teacher/login", "POST", { email: "ana@cole.es", password: "mala" }, null, null, "9.9.9.9");
+assert.equal((await call("/teacher/login", "POST", { email: "ana@cole.es", password: "mala" }, null, null, "9.9.9.9")).s, 429);
+assert.equal((await call("/teacher/login", "POST", { email: "ana@cole.es", password: "nueva12345" })).s, 200);
+// máximo de 30 clases, sin dejar clases ni códigos sueltos
+for (let i = 0; i < 27; i++) assert.equal((await call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)).s, 201);
+const two = await Promise.all([1, 2, 3].map(() => call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)));
+assert.deepEqual(two.map((x) => x.s).sort(), [201, 400, 400]); // a la vez: solo cabe una más
+assert.equal((await call("/teacher/me", "GET", null, A2)).j.classes.length, 30);
+const nc = [...mem.keys()].filter((k) => k.startsWith("classes/")).length;
+assert.equal((await call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)).s, 400);
+assert.equal([...mem.keys()].filter((k) => k.startsWith("classes/")).length, nc);
 console.log("ok");

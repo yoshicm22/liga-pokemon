@@ -3344,12 +3344,10 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.classBusy = true; this.classFormMsg = ''; this.classFormOk = '';
                     try {
                         const d = await this.api('/teacher/classes', 'POST', { grade: f.grade, group: f.group.trim(), school: f.school.trim() });
-                        const primera = !this.teacherClasses.length;
                         this.teacherClasses = [...this.teacherClasses, d.class];
                         f.group = '';
                         this.playSound('token');
-                        if (primera) await this.chooseClass(d.class.id);
-                        else this.classFormOk = 'Clase creada: ' + this.claseTitle(d.class, ' ') + '. Ya puedes abrirla en la lista.';
+                        await this.chooseClass(d.class.id);
                     } catch (e) { this.classFormMsg = e.message; }
                     finally { this.classBusy = false; }
                 },

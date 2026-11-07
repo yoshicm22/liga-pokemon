@@ -192,26 +192,27 @@ async function update(key, fn, tries = 8) {
 
 /* ---------- límite de intentos (atómico: cuenta ANTES de comprobar) ---------- */
 const rlKey = (k) => "rl/" + sha(k).slice(0, 32);
-async function attempt(key, max, windowMs, lockMs) {
+// maxLockMs > lockMs: cada bloqueo seguido dura el doble (hasta maxLockMs). failOpen: si no se puede contar, se deja pasar
+async function attempt(key, max, windowMs, lockMs, maxLockMs = lockMs, failOpen = true) {
   const now = Date.now();
   let r;
   // 25 tablets a la vez pelean por este contador: más reintentos y, si aun así no se puede contar, se deja pasar (nunca dejar fuera a un niño)
   try {
     r = await update(rlKey(key), (cur) => {
       if (cur?.until && cur.until > now) return undefined;
-      const x = cur && now - cur.first < windowMs && !cur.until ? cur : { count: 0, first: now };
+      const x = cur && now - cur.first < windowMs && !cur.until ? cur : { count: 0, first: now, lv: cur?.lv || 0 };
       x.count++;
-      if (x.count > max) x.until = now + lockMs;
+      if (x.count > max) { x.lv = (x.lv || 0) + 1; x.until = now + Math.min(lockMs * 2 ** (x.lv - 1), maxLockMs); }
       return x;
     }, 30);
-  } catch { return { ok: true }; }
+  } catch { return { ok: failOpen, mins: 1 }; }
   if (r === null || (r.until && r.until > now)) {
     const cur = await store.get(rlKey(key), { type: "json" });
     return { ok: false, mins: Math.max(1, Math.ceil(((cur?.until || now) - now) / 60000)) };
   }
   return { ok: true };
 }
-const bump = async (key, max, windowMs) => (await attempt(key, max, windowMs, windowMs)).ok;
+const bump = async (key, max, windowMs, failOpen = true) => (await attempt(key, max, windowMs, windowMs, windowMs, failOpen)).ok;
 const clearAttempts = (key) => store.delete(rlKey(key));
 
 /* ---------- datos ---------- */
@@ -531,11 +532,12 @@ async function classHandler(req, context) {
       const s = id ? await getStudent(id) : null;
       if (!s) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!"); // sin crear registros para ids inventados
       // 10 fallos cada 5 min y bloqueo corto: frena la fuerza bruta sin dejar a un niño fuera mucho rato si un compañero le fastidia
-      const a1 = await attempt(`login:${id}`, 10, 5 * 60 * 1000, 3 * 60 * 1000);
+      // cada bloqueo seguido dura el doble (máx. 1 h); acertar lo reinicia
+      const a1 = await attempt(`login:${id}`, 10, 5 * 60 * 1000, 3 * 60 * 1000, 60 * 60 * 1000);
       if (!a1.ok) return fail(429, `Demasiados intentos con este perfil. Espera ${a1.mins} min.`);
       if (!checkPw(b.password ?? "", s.passHash)) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!");
       await clearAttempts(`login:${id}`);
-      const token = await sign({ role: "student", sid: s.id, cid: scope.getStore(), ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
+      const token = await sign({ role: "student", sid: s.id, cid: scope.getStore(), ep: await getEpoch(), pv: s.pv || 0, exp: Date.now() + STUDENT_TTL });
       return json({ token, profile: await viewOf(s) });
     }
 
@@ -545,13 +547,17 @@ async function classHandler(req, context) {
 
     /* --- alumno --- */
     if (session.role === "student") {
+      // si el profe cambió el código del alumno, las sesiones abiertas con el viejo dejan de valer (tokens sin pv = 0)
+      const stale = (s) => (s.pv || 0) !== (session.pv || 0);
+      const smut = (fn) => mutate(session.sid, (s) => (stale(s) ? fail(401, "Sesión caducada. Vuelve a entrar.") : fn(s)));
       if (path === "/me" && method === "GET") {
         const s = await getStudent(session.sid);
+        if (s && stale(s)) return fail(401, "Sesión caducada. Vuelve a entrar.");
         return s ? json({ profile: await viewOf(s) }) : fail(401, "Tu perfil ya no está en esta clase. Pide a tu profe el código de tu clase nueva.");
       }
       if (path === "/me" && method === "PUT") {
         const b = await readBody(req);
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const { redeemedRewards, ownedPokemon, activeTeam, shinyPokemon, ...rest } = b;
           applyCommon(s, rest);
           // las fichas las calcula el servidor: el cliente nunca dice cuántas tiene
@@ -589,7 +595,7 @@ async function classHandler(req, context) {
       }
       if (path === "/me/chest-seen" && method === "POST") {
         const b = await readBody(req);
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const q = s.pendingChests || [];
           // con dos dispositivos abiertos, cada uno cierra su propio cofre y no el del otro
           s.pendingChests = q.length && (b.g === undefined || q[0].g === b.g) ? q.slice(1) : q;
@@ -600,7 +606,7 @@ async function classHandler(req, context) {
         const b = await readBody(req);
         const name = clean(b.name, 60);
         if (!isPoke(name)) return fail(400, "Pokémon no válido.");
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const pc = Array.isArray(s.pendingChoice) ? s.pendingChoice : [];
           if (!pc.length) return fail(409, "No tienes ninguna elección pendiente.");
           if (POKE_COST[name] > (pc[0].maxCost || 4)) return fail(400, "Ese Pokémon es demasiado fuerte para esta elección.");
@@ -613,7 +619,7 @@ async function classHandler(req, context) {
       if (path === "/me/self-eval" && method === "POST") {
         const b = await readBody(req);
         if (!face(b.effort) || !face(b.fair)) return fail(400, "Elige una carita en cada pregunta.");
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           // se puede cambiar durante el día; se guardan los últimos EVAL_KEEP días
           const ev = { ...(isObj(s.selfEval) ? s.selfEval : {}), [madridDay(Date.now())]: [b.effort, b.fair] };
           s.selfEval = Object.fromEntries(Object.entries(ev).sort(([x], [y]) => x.localeCompare(y)).slice(-EVAL_KEEP));
@@ -625,7 +631,7 @@ async function classHandler(req, context) {
         const id = b.id;
         if (!Object.hasOwn(ITEM_COST, id) || !["buy", "use"].includes(b.action)) return fail(400, "Objeto no válido.");
         const today = madridDay(Date.now());
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const items = { pocion: 0, superball: 0, ...(isObj(s.items) ? s.items : {}) };
           if (b.action === "buy") {
             if (items[id] >= ITEM_MAX) return fail(409, `Ya llevas ${ITEM_MAX} en la mochila. Usa uno antes de comprar otro.`);
@@ -651,7 +657,7 @@ async function classHandler(req, context) {
         const b = await readBody(req);
         const line = COMPANIONS.find((l) => l[0] === b.name);
         if (!line) return fail(400, "Ese Pokémon no puede ser tu compañero.");
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           if (s.companion) return fail(409, "Ya tienes compañero.");
           s.companion = { line: line[0], stage: 0 };
           giveMon(s, line[0], false);
@@ -660,7 +666,7 @@ async function classHandler(req, context) {
       }
       if (path === "/me/companion/evolve" && method === "POST") {
         const closed = await getAttClosed();
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const c = s.companion, line = c && COMPANIONS.find((l) => l[0] === c.line);
           if (!line) return fail(409, "Todavía no tienes compañero.");
           if (c.stage >= 2) return fail(409, "Tu compañero ya está en su forma final.");
@@ -743,7 +749,7 @@ async function classHandler(req, context) {
         if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length <= 50) {
           s.pendingNotifications = b.pendingNotifications.map((n) => ({ title: clean(n?.title, 80), desc: clean(n?.desc, 300), icon: clean(n?.icon, 8) }));
         }
-        if (typeof b.newPassword === "string" && b.newPassword.length) s.passHash = hashPw(b.newPassword);
+        if (typeof b.newPassword === "string" && b.newPassword.length) { s.passHash = hashPw(b.newPassword); s.pv = (s.pv || 0) + 1; }
         });
         if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (/^names\/[0-9a-f]{32}$/.test(oldKey)) await store.delete(oldKey); }
         return out instanceof Response ? out : json({ profile: teacherView(out) });
@@ -1016,7 +1022,7 @@ async function deleteClassData(cid) {
 async function teacherAccount(req, path, method, ip, session) {
   if (method === "POST" && path === "/teacher/register") {
     const b = await readBody(req);
-    if (!(await bump("treg:" + ip, 5, 60 * 60 * 1000))) return fail(429, "Demasiadas cuentas nuevas desde esta red. Inténtalo más tarde.");
+    if (!(await bump("treg:" + ip, 5, 60 * 60 * 1000, false))) return fail(429, "Demasiadas cuentas nuevas desde esta red. Inténtalo más tarde.");
     const name = clean(b.name, 60), email = clean(b.email, 254).toLowerCase(), pw = String(b.password ?? "");
     if (name.length < 2) return fail(400, "Escribe tu nombre.");
     if (!emailOk(email)) return fail(400, "Escribe un correo válido.");
@@ -1024,28 +1030,33 @@ async function teacherAccount(req, path, method, ip, session) {
     const t = { id: "t_" + crypto.randomBytes(8).toString("hex"), name, email, passHash: hashPw(pw), classes: [], tv: 0, createdAt: Date.now() };
     const recovery = recoveryCode();
     t.recHash = hashPw(recovery);
-    if ((await raw.setJSON(emailKey(email), { tid: t.id }, { onlyIfNew: true }))?.modified === false) return fail(409, "Ya hay una cuenta con ese correo. Entra o recupera la contraseña.");
-    await raw.setJSON("teachers/" + t.id, t);
+    // mensaje genérico: no confirma qué correos tienen cuenta
+    if ((await raw.setJSON(emailKey(email), { tid: t.id }, { onlyIfNew: true }))?.modified === false) return fail(400, "No se ha podido crear la cuenta con ese correo. Si ya tienes una, entra o usa tu código de recuperación.");
+    // si no se guarda la ficha, se libera el correo para que no quede bloqueado para siempre
+    try { await raw.setJSON("teachers/" + t.id, t); } catch (e) { await raw.delete(emailKey(email)).catch(() => {}); throw e; }
     return json({ token: await teacherToken(t), teacher: accountView(t), classes: [], recovery }, 201);
   }
   if (method === "POST" && path === "/teacher/login") {
     const b = await readBody(req);
     const email = clean(b.email, 254).toLowerCase();
-    const a1 = await attempt(`teacher:${ip}`, 20, 5 * 60 * 1000, 2 * 60 * 1000);
+    const a1 = await attempt(`teacher:${ip}`, 20, 5 * 60 * 1000, 2 * 60 * 1000, 2 * 60 * 1000, false);
     if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
-    const a2 = await attempt(`tmail:${email}`, 10, 5 * 60 * 1000, 5 * 60 * 1000);
+    // por correo+IP (otro no deja fuera al profe) y uno global por correo mucho más alto contra ataques repartidos
+    const a3 = await attempt(`tmailall:${email}`, 100, 60 * 60 * 1000, 15 * 60 * 1000, 15 * 60 * 1000, false);
+    if (!a3.ok) return fail(429, `Demasiados intentos con esta cuenta. Espera ${a3.mins} min.`);
+    const a2 = await attempt(`tmail:${email}:${ip}`, 10, 5 * 60 * 1000, 5 * 60 * 1000, 5 * 60 * 1000, false);
     if (!a2.ok) return fail(429, `Demasiados intentos con esta cuenta. Espera ${a2.mins} min.`);
     const tid = (await raw.get(emailKey(email), { type: "json" }))?.tid;
     const t = tid ? await getTeacher(tid) : null;
     if (!t || !checkPw(b.password ?? "", t.passHash)) return fail(401, "Correo o contraseña incorrectos.");
-    await clearAttempts(`tmail:${email}`);
+    await clearAttempts(`tmail:${email}:${ip}`);
     const classes = (await Promise.all(t.classes.map(getClass))).filter(Boolean);
     return json({ token: await teacherToken(t), teacher: accountView(t), classes: await Promise.all(classes.map(classView)) });
   }
   if (method === "POST" && path === "/teacher/recover") {
     const b = await readBody(req);
     const email = clean(b.email, 254).toLowerCase(), pw = String(b.password ?? "");
-    const a1 = await attempt(`trec:${email}`, 5, 15 * 60 * 1000, 15 * 60 * 1000);
+    const a1 = await attempt(`trec:${email}`, 5, 15 * 60 * 1000, 15 * 60 * 1000, 15 * 60 * 1000, false);
     if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
     if (pw.length < 8 || pw.length > 200) return fail(400, "La contraseña nueva debe tener al menos 8 caracteres.");
     const tid = (await raw.get(emailKey(email), { type: "json" }))?.tid;
@@ -1084,7 +1095,9 @@ async function teacherAccount(req, path, method, ip, session) {
     const id = "c_" + crypto.randomBytes(6).toString("hex");
     const c = { id, tid, ...f, code: await issueCode(id), createdAt: Date.now() };
     await raw.setJSON("classes/" + id, c);
-    await updateRaw("teachers/" + tid, (x) => ({ ...x, classes: [...x.classes, id] }));
+    // el límite se comprueba otra vez con el dato fresco: dos altas a la vez no pasan de 30
+    const added = await updateRaw("teachers/" + tid, (x) => (x.classes.length >= 30 ? undefined : { ...x, classes: [...x.classes, id] }));
+    if (!added) { await raw.delete("ccode/" + c.code); await raw.delete("classes/" + id); return fail(400, "Has llegado al máximo de 30 clases."); }
     return json({ class: await classView(c) }, 201);
   }
   const cm = path.match(/^\/teacher\/classes\/(c_[a-f0-9]{12})(\/code)?$/);
