@@ -95,6 +95,68 @@ lk = await wrong(); assert.equal(lk.s, 429); assert.match(JSON.stringify(lk.j), 
 for (let i = 0; i < 12; i++) await call("/teacher/login", "POST", { email: "ana@cole.es", password: "mala" }, null, null, "9.9.9.9");
 assert.equal((await call("/teacher/login", "POST", { email: "ana@cole.es", password: "mala" }, null, null, "9.9.9.9")).s, 429);
 assert.equal((await call("/teacher/login", "POST", { email: "ana@cole.es", password: "nueva12345" })).s, 200);
+// curso editable por clase: sin guardar, la plantilla son los 8 gimnasios del cliente
+const { KANTO_UNITS } = await import(tmp.href);
+const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+assert.deepEqual(JSON.parse(html.match(/const KANTO_UNITS = (\[.*\]);/)[1]), KANTO_UNITS);
+const co0 = (await call("/teacher/course", "GET", null, A2, c5.id)).j.course;
+assert.deepEqual(co0.units.map((u) => u.id), ["u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8"]);
+assert.deepEqual(co0.units.map((u) => u.sessions.length), [9, 12, 16, 12, 12, 12, 12, 12]);
+assert.equal((await call("/public?clase=" + c5.code)).j.course.units.length, 8);
+const base = { units: co0.units, days: [2, 3, 5], start: "2026-09-08", off: [], autoSession: false };
+const U = (id, n, extra) => ({ id, name: "Unidad " + id, icon: "futbol", sessions: Array.from({ length: n }, (_, i) => "S" + (i + 1)), ...extra });
+const bad = async (patch) => (await call("/teacher/course", "PUT", { ...base, ...patch }, A2, c5.id)).s;
+for (const patch of [{ units: [] }, { units: Array.from({ length: 13 }, (_, i) => U("x" + i, 1)) }, { units: [U("a", 31)] }, { units: [U("a", 0)] },
+  { units: [U("a", 1), U("a", 2)] }, { units: [U("a", 1, { name: " " })] }, { units: [U("a b", 1)] }, { units: [U("a", 1, { icon: "img:" })] },
+  { units: [U("a", 1, { icon: "img:", img: "data:image/gif;base64,AAAA" })] }, { units: [U("a", 1, { icon: "img:", img: "data:image/png;base64," + "A".repeat(90000) })] },
+  { units: [U("a", 1, { sessions: [3] })] }, { days: [1, 2, 3, 4, 5, 6] }, { days: [0] }, { days: [2, 2] }, { start: "2026-02-30" }, { end: "2026-01-01" },
+  { off: ["mañana"] }, { off: Array(201).fill("2026-10-12") }, { autoSession: "si" }, { name: 7 }]) assert.equal(await bad(patch), 400, JSON.stringify(patch).slice(0, 120));
+assert.equal((await call("/teacher/course", "PUT", base, B, c5.id)).s, 400); // otro profe no toca esta clase
+assert.equal((await call("/teacher/course", "PUT", { ...base, units: [U("a", 1, { icon: "img:", img: "data:image/png;base64,iVBORw0KGgo=" })] }, A2, c4.id)).s, 200); // imagen pequeña: vale
+// progreso de Lucía en 5ºB: unidad 1 entera (medalla), una de la 2, la última de la 3 y su plan; la unidad 1 se cierra
+const ses = (g, i, total, count = 8) => call(`/teacher/students/${s1.profile.id}/session`, "POST", { gIndex: g, sIndex: i, done: true, gymTotal: total, gymCount: count, gymCity: "x" }, A2, c5.id);
+for (let i = 0; i < 9; i++) assert.equal((await ses(0, i, 9)).s, 200);
+await ses(1, 0, 12); await ses(2, 15, 16); await ses(2, 3, 16);
+await call("/teacher/plan", "PUT", { key: "2-15", plan: { warmup: "se recorta" } }, A2, c5.id);
+await call("/teacher/plan", "PUT", { key: "2-3", plan: { warmup: "pasa a 0-3" } }, A2, c5.id);
+await call("/teacher/plan", "PUT", { key: "1-0", plan: { warmup: "se borra" } }, A2, c5.id);
+assert.equal((await call("/teacher/unit-close", "POST", { g: 0, city: "Plateada" }, A2, c5.id)).s, 200);
+// curso nuevo: la unidad 3 recortada a 10 sesiones va primera, luego la 1, y una nueva de 20 sesiones; las demás se quitan
+const nu = { ...base, name: "Los Pikachus", days: [1, 4], autoSession: true, units: [{ ...co0.units[2], sessions: co0.units[2].sessions.slice(0, 10) }, co0.units[0], U("n1", 20, { name: "Atletismo", icon: "atletismo" })] };
+const put = await call("/teacher/course", "PUT", nu, A2, c5.id);
+assert.equal(put.s, 200, JSON.stringify(put.j)); assert.equal(put.j.course.rev, 1); assert.equal(put.j.course.name, "Los Pikachus");
+const luc = async () => (await call("/teacher/students", "GET", null, A2, c5.id)).j.students.find((x) => x.id === s1.profile.id);
+let lu = await luc();
+assert.deepEqual(lu.gymSessionsData.map((r) => r.length), [10, 9, 20]);
+assert.deepEqual(lu.gymSessionsData[0].map((x, i) => x && i), [false, false, false, 3, false, false, false, false, false, false]);
+assert.ok(lu.gymSessionsData[1].every(Boolean)); assert.ok(!lu.gymSessionsData[2].some(Boolean));
+assert.deepEqual(lu.badges, [false, true, false]); assert.deepEqual(Object.keys(lu.unitsDone), ["1"]); assert.equal(lu.cv, 1);
+let pl = (await call("/teacher/board", "GET", null, A2, c5.id)).j.plans;
+assert.equal(pl["0-3"].warmup, "pasa a 0-3"); assert.ok(!pl["2-15"] && !pl["1-0"] && !pl["0-15"]);
+assert.deepEqual((await call("/teacher/units", "GET", null, A2, c5.id)).j.list.map((x) => x.g), [1]);
+assert.equal((await call("/public?clase=" + c5.code)).j.class.name, "Los Pikachus");
+assert.equal((await call("/teacher/me", "GET", null, A2)).j.classes.find((c) => c.id === c5.id).name, "Los Pikachus");
+// límites nuevos: hasta 30 sesiones; con el curso viejo en pantalla se pide recargar
+assert.equal((await ses(2, 19, 20, 3)).s, 200); assert.equal((await ses(2, 20, 20, 3)).s, 400); assert.equal((await ses(1, 0, 9, 8)).s, 409);
+assert.equal((await call("/teacher/plan", "PUT", { key: "2-19", plan: {} }, A2, c5.id)).s, 200);
+assert.equal((await call("/teacher/plan", "PUT", { key: "3-0", plan: {} }, A2, c5.id)).s, 400);
+assert.equal((await call("/teacher/unit-close", "POST", { g: 3 }, A2, c5.id)).s, 400);
+assert.equal((await call("/teacher/config", "PUT", { currentWeek: 60 }, A2, c5.id)).j.config.currentWeek, 60);
+// guardar otra vez lo mismo no recoloca nada
+lu = await luc();
+assert.equal((await call("/teacher/course", "PUT", nu, A2, c5.id)).j.course.rev, 2);
+assert.deepEqual((await luc()).gymSessionsData, lu.gymSessionsData);
+// las copias llevan el curso; restaurar lo devuelve con su progreso, y un curso dañado no entra
+const snapC = (await call("/teacher/backup", "GET", null, A2, c5.id)).j;
+assert.equal(snapC.data["config/course"].name, "Los Pikachus");
+assert.equal((await call("/teacher/course", "PUT", { ...nu, name: "", units: [nu.units[2]] }, A2, c5.id)).s, 200);
+assert.equal((await luc()).gymSessionsData.length, 1);
+const badSnap = structuredClone(snapC); badSnap.data["config/course"].units = [];
+assert.equal((await call("/teacher/restore", "POST", { snapshot: badSnap }, A2, c5.id)).s, 400);
+assert.equal((await call("/teacher/restore", "POST", { snapshot: snapC }, A2, c5.id)).s, 200);
+assert.equal((await call("/teacher/course", "GET", null, A2, c5.id)).j.course.units.length, 3);
+assert.deepEqual((await luc()).gymSessionsData.map((r) => r.length), [10, 9, 20]);
+assert.equal((await call("/public?clase=" + c5.code)).j.class.name, "Los Pikachus"); // el nombre vuelve con la copia
 // máximo de 30 clases, sin dejar clases ni códigos sueltos
 for (let i = 0; i < 27; i++) assert.equal((await call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)).s, 201);
 const two = await Promise.all([1, 2, 3].map(() => call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)));
