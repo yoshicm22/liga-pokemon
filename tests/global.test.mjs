@@ -114,7 +114,8 @@ for (const patch of [{ units: [] }, { units: Array.from({ length: 13 }, (_, i) =
 assert.equal((await call("/teacher/course", "PUT", base, B, c5.id)).s, 400); // otro profe no toca esta clase
 assert.equal((await call("/teacher/course", "PUT", { ...base, units: [U("a", 1, { icon: "img:", img: "data:image/png;base64,iVBORw0KGgo=" })] }, A2, c4.id)).s, 200); // imagen pequeña: vale
 // progreso de Lucía en 5ºB: unidad 1 entera (medalla), una de la 2, la última de la 3 y su plan; la unidad 1 se cierra
-const ses = (g, i, total, count = 8) => call(`/teacher/students/${s1.profile.id}/session`, "POST", { gIndex: g, sIndex: i, done: true, gymTotal: total, gymCount: count, gymCity: "x" }, A2, c5.id);
+let REV = "0"; // la versión del curso que el cliente tiene en pantalla
+const ses = (g, i, total, count = 8, rev = REV, done = true) => call(`/teacher/students/${s1.profile.id}/session`, "POST", { gIndex: g, sIndex: i, done, gymTotal: total, gymCount: count, gymCity: "x", rev }, A2, c5.id);
 for (let i = 0; i < 9; i++) assert.equal((await ses(0, i, 9)).s, 200);
 await ses(1, 0, 12); await ses(2, 15, 16); await ses(2, 3, 16);
 await call("/teacher/plan", "PUT", { key: "2-15", plan: { warmup: "se recorta" } }, A2, c5.id);
@@ -124,19 +125,20 @@ assert.equal((await call("/teacher/unit-close", "POST", { g: 0, city: "Plateada"
 // curso nuevo: la unidad 3 recortada a 10 sesiones va primera, luego la 1, y una nueva de 20 sesiones; las demás se quitan
 const nu = { ...base, name: "Los Pikachus", days: [1, 4], autoSession: true, units: [{ ...co0.units[2], sessions: co0.units[2].sessions.slice(0, 10) }, co0.units[0], U("n1", 20, { name: "Atletismo", icon: "atletismo" })] };
 const put = await call("/teacher/course", "PUT", nu, A2, c5.id);
-assert.equal(put.s, 200, JSON.stringify(put.j)); assert.equal(put.j.course.rev, 1); assert.equal(put.j.course.name, "Los Pikachus");
+assert.equal(put.s, 200, JSON.stringify(put.j)); assert.match(put.j.course.rev, /^\w{8,40}$/); REV = put.j.course.rev; assert.equal(put.j.course.name, "Los Pikachus");
 const luc = async () => (await call("/teacher/students", "GET", null, A2, c5.id)).j.students.find((x) => x.id === s1.profile.id);
 let lu = await luc();
 assert.deepEqual(lu.gymSessionsData.map((r) => r.length), [10, 9, 20]);
 assert.deepEqual(lu.gymSessionsData[0].map((x, i) => x && i), [false, false, false, 3, false, false, false, false, false, false]);
 assert.ok(lu.gymSessionsData[1].every(Boolean)); assert.ok(!lu.gymSessionsData[2].some(Boolean));
-assert.deepEqual(lu.badges, [false, true, false]); assert.deepEqual(Object.keys(lu.unitsDone), ["1"]); assert.equal(lu.cv, 1);
+assert.deepEqual(lu.badges, [false, true, false]); assert.deepEqual(Object.keys(lu.unitsDone), ["1"]); assert.equal(lu.cv, REV);
 let pl = (await call("/teacher/board", "GET", null, A2, c5.id)).j.plans;
 assert.equal(pl["0-3"].warmup, "pasa a 0-3"); assert.ok(!pl["2-15"] && !pl["1-0"] && !pl["0-15"]);
 assert.deepEqual((await call("/teacher/units", "GET", null, A2, c5.id)).j.list.map((x) => x.g), [1]);
 assert.equal((await call("/public?clase=" + c5.code)).j.class.name, "Los Pikachus");
 assert.equal((await call("/teacher/me", "GET", null, A2)).j.classes.find((c) => c.id === c5.id).name, "Los Pikachus");
 // límites nuevos: hasta 30 sesiones; con el curso viejo en pantalla se pide recargar
+assert.equal((await ses(2, 19, 20, 3, "0")).s, 409); // marcar con la versión vieja del curso
 assert.equal((await ses(2, 19, 20, 3)).s, 200); assert.equal((await ses(2, 20, 20, 3)).s, 400); assert.equal((await ses(1, 0, 9, 8)).s, 409);
 assert.equal((await call("/teacher/plan", "PUT", { key: "2-19", plan: {} }, A2, c5.id)).s, 200);
 assert.equal((await call("/teacher/plan", "PUT", { key: "3-0", plan: {} }, A2, c5.id)).s, 400);
@@ -144,7 +146,7 @@ assert.equal((await call("/teacher/unit-close", "POST", { g: 3 }, A2, c5.id)).s,
 assert.equal((await call("/teacher/config", "PUT", { currentWeek: 60 }, A2, c5.id)).j.config.currentWeek, 60);
 // guardar otra vez lo mismo no recoloca nada
 lu = await luc();
-assert.equal((await call("/teacher/course", "PUT", nu, A2, c5.id)).j.course.rev, 2);
+const rev2 = (await call("/teacher/course", "PUT", nu, A2, c5.id)).j.course.rev; assert.ok(rev2 !== REV); REV = rev2;
 assert.deepEqual((await luc()).gymSessionsData, lu.gymSessionsData);
 // las copias llevan el curso; restaurar lo devuelve con su progreso, y un curso dañado no entra
 const snapC = (await call("/teacher/backup", "GET", null, A2, c5.id)).j;
@@ -157,6 +159,47 @@ assert.equal((await call("/teacher/restore", "POST", { snapshot: snapC }, A2, c5
 assert.equal((await call("/teacher/course", "GET", null, A2, c5.id)).j.course.units.length, 3);
 assert.deepEqual((await luc()).gymSessionsData.map((r) => r.length), [10, 9, 20]);
 assert.equal((await call("/public?clase=" + c5.code)).j.class.name, "Los Pikachus"); // el nombre vuelve con la copia
+REV = (await call("/teacher/course", "GET", null, A2, c5.id)).j.course.rev; assert.equal(REV, snapC.data["config/course"].rev);
+// dos guardados del curso a la vez: entra uno, el otro recibe 409, y el progreso queda en el orden del que entró
+const nuB = { ...nu, units: [nu.units[1], nu.units[0], nu.units[2]] };
+const both = await Promise.all([call("/teacher/course", "PUT", nu, A2, c5.id), call("/teacher/course", "PUT", nuB, A2, c5.id)]);
+assert.deepEqual(both.map((r) => r.s).sort(), [200, 409]);
+let cc = (await call("/teacher/course", "GET", null, A2, c5.id)).j.course; REV = cc.rev;
+assert.equal(REV, both.find((r) => r.s === 200).j.course.rev);
+lu = await luc(); assert.equal(lu.cv, REV); assert.deepEqual(lu.gymSessionsData.map((r) => r.length), cc.units.map((u) => u.sessions.length));
+assert.deepEqual(lu.badges, cc.units.map((u) => u.id === "u1"));
+// un guardado que se corta antes de recolocar a un alumno: se recoloca solo al leerlo
+const kL = `c/${c5.id}/students/${s1.profile.id}`, viejo = mem.get(kL);
+const put3 = await call("/teacher/course", "PUT", nu, A2, c5.id); assert.equal(put3.s, 200); REV = put3.j.course.rev;
+mem.set(kL, viejo); // como si la recolocación no hubiera llegado a este alumno
+lu = await luc(); assert.equal(lu.cv, REV); assert.deepEqual(lu.gymSessionsData.map((r) => r.length), [10, 9, 20]); assert.deepEqual(lu.badges, [false, true, false]);
+assert.equal(JSON.parse(mem.get(kL).d).cv, cc.rev); // leer no escribe
+assert.equal((await ses(0, 0, 10, 3)).s, 200); assert.equal(JSON.parse(mem.get(kL).d).cv, REV); // al cambiarlo se guarda ya recolocado
+// añadir sesiones a una unidad ya completada no quita la medalla, ni al marcar una de las nuevas
+const nuC = { ...nu, units: [nu.units[0], { ...nu.units[1], sessions: [...nu.units[1].sessions, "Extra 1", "Extra 2"] }, nu.units[2]] };
+REV = (await call("/teacher/course", "PUT", nuC, A2, c5.id)).j.course.rev;
+lu = await luc(); assert.deepEqual(lu.badges, [false, true, false]); assert.equal(lu.gymSessionsData[1].filter(Boolean).length, 9);
+assert.equal((await ses(1, 9, 11, 3)).s, 200); assert.deepEqual((await luc()).badges, [false, true, false]);
+// el profe edita medallas y sesiones: con la versión y la forma del curso actual
+const putS = (b) => call("/teacher/students/" + s1.profile.id, "PUT", b, A2, c5.id);
+assert.equal((await putS({ badges: [false, true, true] })).s, 409);
+assert.equal((await putS({ badges: [false, true, true], rev: "0" })).s, 409);
+assert.equal((await putS({ badges: [false, true], rev: REV })).s, 400);
+assert.equal((await putS({ badges: [false, true, "si"], rev: REV })).s, 400);
+assert.equal((await putS({ gymSessionsData: [[true]], rev: REV })).s, 400);
+assert.equal((await putS({ note: "sin tocar medallas" })).s, 200); // lo demás no pide versión
+assert.equal((await putS({ badges: [false, true, true], rev: REV })).s, 200); // medalla de Atletismo a mano
+// la medalla dada a mano sigue a su unidad al cambiar el curso y al pasar a otra clase
+REV = (await call("/teacher/course", "PUT", { ...nu, units: [nu.units[2], nu.units[0]] }, A2, c5.id)).j.course.rev;
+assert.deepEqual((await luc()).badges, [true, false]);
+const cX = (await call("/teacher/classes", "POST", { grade: 6, group: "C", school: "CEIP Kanto" }, A2)).j.class;
+assert.equal((await call("/teacher/course", "PUT", { ...base, units: [U("z", 2), nu.units[2]] }, A2, cX.id)).s, 200);
+assert.equal((await call("/teacher/move", "POST", { from: c5.id, to: cX.id, id: s1.profile.id }, A2)).s, 200);
+const enCM = (await call("/teacher/students", "GET", null, A2, cX.id)).j.students.find((x) => x.id === s1.profile.id);
+assert.deepEqual(enCM.badges, [false, true]); assert.equal(enCM.cv, (await call("/teacher/course", "GET", null, A2, cX.id)).j.course.rev);
+assert.equal((await call("/teacher/move", "POST", { from: cX.id, to: c5.id, id: s1.profile.id }, A2)).s, 200);
+assert.deepEqual((await luc()).badges, [true, false]); // y vuelve con ella
+assert.equal((await call("/teacher/classes/" + cX.id, "DELETE", null, A2)).s, 200);
 // máximo de 30 clases, sin dejar clases ni códigos sueltos
 for (let i = 0; i < 27; i++) assert.equal((await call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)).s, 201);
 const two = await Promise.all([1, 2, 3].map(() => call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)));

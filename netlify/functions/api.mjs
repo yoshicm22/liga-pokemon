@@ -237,14 +237,16 @@ const shortName = (n) => {
   return parts.length > 1 ? `${parts[0]} ${[...parts[1]][0].toUpperCase()}.` : (parts[0] || "");
 };
 const nameKeyOf = (name) => "names/" + sha(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()).slice(0, 32);
-const getStudent = (id) => store.get("students/" + id, { type: "json" });
+const getStudent = async (id) => { const s = await store.get("students/" + id, { type: "json" }); return s && syncStudent(s, await getCourse()); };
 const putStudent = (p) => store.setJSON("students/" + p.id, p);
-// cambia un alumno de forma atómica; fn recibe el alumno y puede devolver un Response de error
+// cambia un alumno de forma atómica, ya pasado a la versión actual del curso; fn(alumno, curso) puede devolver un Response de error
 async function mutate(id, fn) {
   let res;
+  const c = await getCourse();
   const out = await update("students/" + id, async (s) => {
     if (!s) { res = fail(404, "Alumno no encontrado."); return undefined; }
-    const r = await fn(s);
+    syncStudent(s, c);
+    const r = await fn(s, c);
     if (r instanceof Response) { res = r; return undefined; }
     return s;
   });
@@ -252,8 +254,8 @@ async function mutate(id, fn) {
 }
 async function allStudents() {
   const { blobs } = await store.list({ prefix: "students/" });
-  const list = await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })));
-  return list.filter(Boolean).sort((a, b) => String(a.name).localeCompare(String(b.name), "es"));
+  const [list, c] = await Promise.all([Promise.all(blobs.map((b) => store.get(b.key, { type: "json" }))), getCourse()]);
+  return list.filter(Boolean).map((s) => syncStudent(s, c)).sort((a, b) => String(a.name).localeCompare(String(b.name), "es"));
 }
 const getConfig = async () => normCfg(await store.get("config/main", { type: "json" }));
 function normCfg(c0) {
@@ -268,7 +270,7 @@ function normCfg(c0) {
 export const KANTO_UNITS = [{"id": "u1", "name": "Ciudad Plateada", "icon": "ball-poke", "badgeName": "Medalla Roca 🪨", "sessions": ["1. Presentación.", "2. Antropometría.", "3. Dinámicas.", "4. Calentamiento 1.", "5. Calentamiento 2.", "6. Cooperativos 1.", "7. Cooperativos 2.", "8. Cooperativos 3.", "9. SA"]}, {"id": "u2", "name": "Ciudad Celeste", "icon": "ball-great", "badgeName": "Medalla Cascada 💧", "sessions": ["1. Higiene.", "2. Lateralidad.", "3. Corporal.", "4. Espacio.", "5. Equilibrio estático.", "6. Dinámico.", "7. Ruedas 1.", "8. Ruedas 2.", "9. Ruedas 3.", "10. SA 1.", "11. SA 2.", "12. Evaluación."]}, {"id": "u3", "name": "Ciudad Vermilion", "icon": "ball-ultra", "badgeName": "Medalla Rayo ⚡", "sessions": ["1. Intro.", "2. Cuadrupedia.", "3. Reptación.", "4. Trepa.", "5. Saltos.", "6. Comba.", "7. Volteretas 1.", "8. Volteretas 2.", "9. Lanzamientos 1.", "10. Lanzamientos 2.", "11. Golpeos.", "12. Blocajes.", "13. SA 1.", "14. SA 2.", "15. SA 3.", "16. Eval."]}, {"id": "u4", "name": "Ciudad Fucsia", "icon": "ball-master", "badgeName": "Medalla Arcoíris 🌈", "sessions": ["1. Intro.", "2. Fuerza 1.", "3. Fuerza 2.", "4. Velocidad 1.", "5. Velocidad 2.", "6. Resistencia 1.", "7. Resistencia 2.", "8. Flexibilidad.", "9. SA 1.", "10. SA 2.", "11. SA 3.", "12. Circuito."]}, {"id": "u5", "name": "Ciudad Azafrán", "icon": "ball-luxury", "badgeName": "Medalla Pantano 🔮", "sessions": ["1. Intro.", "2. Expresivos.", "3. Impro 1.", "4. Impro 2.", "5. Rítmicos.", "6. Teatrillo.", "7. Drama.", "8. Concurso.", "9. SA 1.", "10. SA 2.", "11. SA 3.", "12. Eval."]}, {"id": "u6", "name": "Pueblo Lavanda", "icon": "ball-premier", "badgeName": "Medalla Alma 🧠", "sessions": ["1. Material.", "2. Bádminton 1.", "3. Bádminton 2.", "4. Torneo Bádminton.", "5. Suaviball 1.", "6. Suaviball 2.", "7. Torneo Suaviball.", "8. SA 1.", "9. SA 2.", "10. SA 3.", "11. Eval Bádminton.", "12. Eval Suaviball."]}, {"id": "u7", "name": "Isla Canela", "icon": "ball-dive", "badgeName": "Medalla Volcán 🦾", "sessions": ["1. Intro.", "2. Datchball 1.", "3. Datchball 2.", "4. Bijbol 1.", "5. Bijbol 2.", "6. SA 1.", "7. SA 2.", "8. SA 3.", "9. Juegos 1.", "10. Juegos 2.", "11. Torneos.", "12. Eval."]}, {"id": "u8", "name": "Ciudad Verde", "icon": "ball-timer", "badgeName": "Medalla Tierra 🤝", "sessions": ["1. Intro.", "2. Mapas 1.", "3. Mapas 2.", "4. Orientación 1.", "5. Orientación 2.", "6. Orientación 3.", "7. Escalada 1.", "8. Escalada 2.", "9. SA 1.", "10. SA 2.", "11. Antropometría.", "12. Salida natural."]}];
 const MAX_UNITS = 12, MAX_SES = 30, MAX_WEEK = 400, IMG_MAX = 60 * 1024;
 const schoolStart = () => { const [y, m] = madridDay(Date.now()).split("-").map(Number); return `${m >= 9 ? y : y - 1}-09-01`; };
-const defaultCourse = () => ({ units: structuredClone(KANTO_UNITS), days: [2, 3, 5], start: schoolStart(), off: [], autoSession: false, rev: 0 });
+const defaultCourse = () => ({ units: structuredClone(KANTO_UNITS), days: [2, 3, 5], start: schoolStart(), off: [], autoSession: false, rev: "0" });
 const courseOk = (c) => isObj(c) && Array.isArray(c.units) && c.units.length > 0;
 const courseOf = async (cid) => { const c = await raw.get(`c/${cid}/config/course`, { type: "json" }); return courseOk(c) ? c : defaultCourse(); };
 const getCourse = () => courseOf(scope.getStore());
@@ -308,29 +310,49 @@ function courseFields(b) {
   const name = clean(b.name, 60);
   return { ...(name ? { name } : {}), units, days: [...days].sort((x, y) => x - y), start: b.start, ...(b.end ? { end: b.end } : {}), off: [...new Set(b.off)].sort(), autoSession: b.autoSession };
 }
+// Versiones del curso: cada guardado lleva un rev único y config/course guarda los ids de unidades de las últimas versiones (hist).
+// El progreso de cada alumno, los planes y las unidades cerradas llevan la versión en la que están (cv; sin cv = la plantilla "0")
+// y se pasan a la actual por id al leerlos o cambiarlos: si un guardado se corta a medias, lo que falta se completa solo.
+const HIST_KEEP = 40;
+const revOf = (c) => String(c?.rev ?? "0");
+const idsOf = (c) => c.units.map((u) => u.id);
+// shortcut: una versión más vieja que las HIST_KEEP últimas se toma con el orden actual (por posición); si pasa, subir HIST_KEEP
+const oldIds = (c, rev) => (rev === revOf(c) ? idsOf(c) : Array.isArray(c.hist?.[rev]) ? c.hist[rev] : rev === "0" ? KANTO_UNITS.map((u) => u.id) : idsOf(c));
 // índice nuevo -> índice viejo de cada unidad (por su id estable); -1 si la unidad es nueva
-const unitMap = (oldC, newC) => newC.units.map((u) => oldC.units.findIndex((o) => o.id === u.id));
-const sameShape = (oldC, newC, map) => map.length === oldC.units.length && map.every((o, n) => o === n && oldC.units[n].sessions.length === newC.units[n].sessions.length);
-// pasa el progreso de un alumno del curso viejo al nuevo: unidad quitada = se pierde su progreso, sesiones recortadas = se recortan, nuevas = sin hacer
-function remapStudent(s, oldC, newC) {
-  const map = unitMap(oldC, newC), back = new Map(map.map((o, n) => [o, n]).filter(([o]) => o >= 0));
+const unitMap = (ids, c) => c.units.map((u) => ids.indexOf(u.id));
+// pasa el progreso de un alumno (en el orden de unidades ids) al curso c: unidad quitada = se pierde su progreso,
+// sesiones recortadas = se recortan, nuevas = sin hacer; la medalla se conserva mientras la unidad exista
+function remapProgress(s, ids, c) {
+  const map = unitMap(ids, c), back = new Map(map.map((o, n) => [o, n]).filter(([o]) => o >= 0));
   const ng = (g) => (back.has(g) ? back.get(g) : -1);
   const grid = Array.isArray(s.gymSessionsData) ? s.gymSessionsData : [], bd = Array.isArray(s.badges) ? s.badges : [];
-  s.gymSessionsData = newC.units.map((u, n) => Array.from({ length: u.sessions.length }, (_, i) => map[n] >= 0 && Array.isArray(grid[map[n]]) && !!grid[map[n]][i]));
-  s.badges = newC.units.map((u, n) => map[n] >= 0 && !!bd[map[n]] && s.gymSessionsData[n].every(Boolean));
+  s.gymSessionsData = c.units.map((u, n) => Array.from({ length: u.sessions.length }, (_, i) => map[n] >= 0 && Array.isArray(grid[map[n]]) && !!grid[map[n]][i]));
+  s.badges = c.units.map((u, n) => map[n] >= 0 && !!bd[map[n]]);
   if (isObj(s.unitsDone)) s.unitsDone = Object.fromEntries(Object.keys(s.unitsDone).map((g) => [ng(Number(g)), 1]).filter(([g]) => g >= 0));
   for (const k of ["trophies", "pendingChests", "pendingChoice"]) if (Array.isArray(s[k])) s[k] = s[k].map((x) => (isObj(x) && Number.isInteger(x.g) ? { ...x, g: ng(x.g) } : x));
   if (typeof s.superballCell === "string") {
     const [g, i] = s.superballCell.split("-").map(Number), n = ng(g);
-    if (n >= 0 && i < newC.units[n].sessions.length) s.superballCell = n + "-" + i; else delete s.superballCell;
+    if (n >= 0 && i < c.units[n].sessions.length) s.superballCell = n + "-" + i; else delete s.superballCell;
   }
-  s.cv = newC.rev || 0;
+  s.cv = revOf(c);
 }
-const remapPlans = (p, map, newC) => {
-  const out = {};
-  map.forEach((o, n) => { if (o >= 0) for (let i = 0; i < newC.units[n].sessions.length; i++) if (p[o + "-" + i]) out[n + "-" + i] = p[o + "-" + i]; });
+// pone al alumno en la versión del curso c (en memoria)
+const syncStudent = (s, c) => { const r = String(s.cv ?? "0"); if (r !== revOf(c)) remapProgress(s, oldIds(c, r), c); return s; };
+const syncPlans = (p, c) => {
+  const r = String(p?._cv ?? "0");
+  if (!p || r === revOf(c)) return p || {};
+  const map = unitMap(oldIds(c, r), c), out = { _cv: revOf(c) };
+  map.forEach((o, n) => { if (o >= 0) for (let i = 0; i < c.units[n].sessions.length; i++) if (p[o + "-" + i]) out[n + "-" + i] = p[o + "-" + i]; });
   return out;
 };
+// una unidad quitada deja su registro con g = -1: sus legendarios siguen contando como entregados
+const syncUnits = (u, c) => {
+  const l = isObj(u) ? u : { list: [] }, r = String(l.cv ?? "0");
+  if (r === revOf(c)) return l;
+  const map = unitMap(oldIds(c, r), c), back = new Map(map.map((o, n) => [o, n]).filter(([o]) => o >= 0));
+  return { list: (l.list || []).map((x) => ({ ...x, g: back.has(x.g) ? back.get(x.g) : -1 })), cv: revOf(c) };
+};
+const histOk = (h) => isObj(h) && Object.keys(h).length <= HIST_KEEP + 1 && Object.entries(h).every(([k, v]) => /^\w{1,40}$/.test(k) && Array.isArray(v) && v.length <= MAX_UNITS && v.every((x) => typeof x === "string" && /^[\w-]{1,16}$/.test(x)));
 
 function factionTotals(students) {
   const t = Object.fromEntries(FACTIONS.map((f) => [f, 0]));
@@ -373,7 +395,7 @@ async function restoreSnapshot(snap) {
   let entries = Object.entries(snap.data).filter(([k, v]) => backupKeyOk(k) && ok(k, v));
   // el curso (unidades y calendario) se valida igual que al guardarlo
   const ci = entries.findIndex(([k]) => k === "config/course");
-  if (ci >= 0) { const f = courseFields(entries[ci][1]); if (typeof f === "string") return "La copia tiene un curso dañado: " + f; entries[ci] = ["config/course", { ...f, rev: intIn(entries[ci][1].rev, 0, 1e9) ? entries[ci][1].rev : 0 }]; }
+  if (ci >= 0) { const f = courseFields(entries[ci][1]); if (typeof f === "string") return "La copia tiene un curso dañado: " + f; const v = entries[ci][1], rv = String(v.rev ?? "0"); if (!/^\w{1,40}$/.test(rv) || (v.hist !== undefined && !histOk(v.hist))) return "La copia tiene un curso dañado."; entries[ci] = ["config/course", { ...f, rev: rv, ...(v.hist ? { hist: v.hist } : {}) }]; }
   if (entries.length > 3000) return "La copia es demasiado grande.";
   const students = entries.filter(([k]) => k.startsWith("students/")).map(([, v]) => v);
   if (!students.length) return "La copia no tiene alumnos.";
@@ -398,7 +420,7 @@ async function restoreSnapshot(snap) {
 const LEGENDS = ["Articuno", "Zapdos", "Moltres", "Dragonite", "Mewtwo", "Mew"];
 const CONSOLATION = Object.keys(POKE_COST).filter((n) => POKE_COST[n] >= 2 && POKE_COST[n] <= 3);
 const pick = (a) => a[crypto.randomInt(a.length)];
-const getUnits = async () => (await store.get("meta/units", { type: "json" })) || { list: [] };
+const getUnits = async () => syncUnits(await store.get("meta/units", { type: "json" }), await getCourse());
 const mastered = (s, g) => (Array.isArray(s.gymSessionsData?.[g]) ? s.gymSessionsData[g].filter(Boolean).length : 0);
 function giveMon(s, name, shiny) {
   s.ownedPokemon = Array.isArray(s.ownedPokemon) ? s.ownedPokemon : ["Pikachu"];
@@ -463,7 +485,7 @@ const DEFAULT_TIMER = { mode: "countdown", status: "idle", durationSec: 300, sta
 const DEFAULT_BOARD = { noise: "green", behavior: 0, effort: 0, phase: 0, absent: [], drawn: [], draw: null, cup: null, timer: DEFAULT_TIMER };
 const withBoard = (b) => ({ ...DEFAULT_BOARD, ...(b || {}), timer: { ...DEFAULT_TIMER, ...(b?.timer || {}) } });
 const getBoard = async () => withBoard(await store.get("board/main", { type: "json" }));
-const getPlans = async () => (await store.get("board/plans", { type: "json" })) || {};
+const getPlans = async () => syncPlans(await store.get("board/plans", { type: "json" }), await getCourse());
 const intIn = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 function applyBoard(bd, b) {
   if (b.chest === null) delete bd.chest;
@@ -589,7 +611,7 @@ async function classHandler(req, context) {
         faction: FACTIONS.includes(b.faction) ? b.faction : "Rayo",
         passHash: hashPw(password),
         tokens: 0, weight: "", height: "", wingspan: "", hrRest: "", theme: "emerald",
-        gymSessionsData: [], badges: (await getCourse()).units.map(() => false),
+        gymSessionsData: [], badges: (await getCourse()).units.map(() => false), cv: revOf(await getCourse()),
         ownedPokemon: ["Pikachu"], activeTeam: ["Pikachu", null, null, null, null, null],
         redeemedRewards: [], dailyQuestStatus: {}, achievements: {}, shinyPokemon: [], pendingNotifications: [],
         createdAt: Date.now(), nameKey,
@@ -792,22 +814,21 @@ async function classHandler(req, context) {
       }
       if (path === "/teacher/course" && method === "GET") return json({ course: await getCourse() });
       if (path === "/teacher/course" && method === "PUT") {
-        const f = courseFields(await readBody(req, 1_000_000));
+        const f = courseFields(await readBody(req, 1_500_000));
         if (typeof f === "string") return fail(400, f);
+        if (JSON.stringify(f).length > 1_400_000) return fail(400, "El curso ocupa demasiado: usa imágenes más pequeñas.");
         const cur = await store.getWithMetadata("config/course", { type: "json" });
         const old = courseOk(cur?.data) ? cur.data : defaultCourse();
-        const next = { ...f, rev: (old.rev || 0) + 1 }, map = unitMap(old, next);
-        // el progreso va por posición: si cambian las unidades o sus sesiones, se recoloca por id en todos los alumnos, los planes y las unidades cerradas.
-        // cada alumno lleva la versión del curso (cv): si se corta a medias y el profe vuelve a guardar, nadie se recoloca dos veces
-        if (!sameShape(old, next, map)) {
-          const back = new Map(map.map((o, n) => [o, n]).filter(([o]) => o >= 0));
-          await Promise.all((await allStudents()).map((s) => mutate(s.id, (x) => { if (x.cv !== next.rev) remapStudent(x, old, next); })));
-          await update("board/plans", (p) => (!p || p._cv === next.rev ? undefined : { ...remapPlans(p, map, next), _cv: next.rev }));
-          // una unidad quitada deja su registro con g = -1: sus legendarios siguen contando como entregados
-          await update("meta/units", (u) => (!u || u.cv === next.rev ? undefined : { list: (u.list || []).map((x) => ({ ...x, g: back.has(x.g) ? back.get(x.g) : -1 })), cv: next.rev }));
-        }
+        const hist = Object.fromEntries([...Object.entries(isObj(old.hist) ? old.hist : {}), [revOf(old), idsOf(old)]].slice(-HIST_KEEP));
+        const next = { ...f, rev: Date.now().toString(36) + crypto.randomBytes(4).toString("hex"), hist };
+        // primero se guarda el curso (solo si nadie lo cambió entre medias); después se recoloca todo hacia él
         const r = await store.setJSON("config/course", next, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
         if (r?.modified === false) return fail(409, "Otro dispositivo ha cambiado el curso a la vez. Vuelve a cargar la página.");
+        // si esto se corta, lo que falte se recoloca al leer o cambiar cada cosa (ver syncStudent)
+        await Promise.all((await allStudents()).map((s) => mutate(s.id, () => {})));
+        const c = await getCourse();
+        await update("board/plans", (p) => (p && String(p._cv ?? "0") !== revOf(c) ? syncPlans(p, c) : undefined));
+        await update("meta/units", (u) => (u && String(u.cv ?? "0") !== revOf(c) ? syncUnits(u, c) : undefined));
         // el nombre libre también va en la ficha de la clase, para las listas de clases
         await updateRaw("classes/" + scope.getStore(), (x) => ({ ...x, name: next.name || "" }));
         return json({ course: next });
@@ -830,7 +851,13 @@ async function classHandler(req, context) {
             newKey = k; oldKey = cur.nameKey;
           }
         }
-        const out = await mutate(m[1], (s) => {
+        const out = await mutate(m[1], (s, c) => {
+        if ("badges" in b || "gymSessionsData" in b) {
+          if (String(b.rev ?? "") !== revOf(c)) return fail(409, "El curso de la clase ha cambiado. Vuelve a cargar la página.");
+          const okB = !("badges" in b) || (Array.isArray(b.badges) && b.badges.length === c.units.length && b.badges.every((x) => typeof x === "boolean"));
+          const okG = !("gymSessionsData" in b) || (Array.isArray(b.gymSessionsData) && b.gymSessionsData.length === c.units.length && b.gymSessionsData.every((r, g) => Array.isArray(r) && r.length === c.units[g].sessions.length && r.every((x) => typeof x === "boolean")));
+          if (!okB || !okG) return fail(400, "Las medallas o las sesiones no encajan con el curso.");
+        }
         if (newKey) s.nameKey = newKey;
         // el profesor no toca lo que es del alumno (Pokémon, canjes, medidas...): evita pisar compras recientes
         if ("name" in b) { const n = clean(b.name, 30); if (n.length >= 2) s.name = n; }
@@ -840,10 +867,8 @@ async function classHandler(req, context) {
         for (const k of ["weight", "height", "wingspan", "hrRest"]) if (k in b) s[k] = clean(b[k], 8);
         if ("note" in b) s.note = clean(b.note, 500);
         if (Number.isFinite(b.tokens) && b.tokens >= 0 && b.tokens <= 9999) s.tokens = Math.floor(b.tokens);
-        if (Array.isArray(b.badges) && b.badges.length <= MAX_UNITS) s.badges = b.badges.map(Boolean);
-        if (Array.isArray(b.gymSessionsData) && b.gymSessionsData.length <= MAX_UNITS && b.gymSessionsData.every(Array.isArray)) {
-          s.gymSessionsData = b.gymSessionsData.map((g) => g.slice(0, MAX_SES).map(Boolean));
-        }
+        if (Array.isArray(b.badges)) s.badges = [...b.badges];
+        if (Array.isArray(b.gymSessionsData)) s.gymSessionsData = b.gymSessionsData.map((g) => [...g]);
         if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length <= 50) {
           s.pendingNotifications = b.pendingNotifications.map((n) => ({ title: clean(n?.title, 80), desc: clean(n?.desc, 300), icon: clean(n?.icon, 8) }));
         }
@@ -861,10 +886,9 @@ async function classHandler(req, context) {
         if (q[2] === "session") {
           const g = b.gIndex, i = b.sIndex, total = b.gymTotal, count = b.gymCount;
           if (!intIn(g, 0, MAX_UNITS - 1) || !intIn(count, 1, MAX_UNITS) || g >= count || !intIn(total, 1, MAX_SES) || !intIn(i, 0, MAX_SES - 1) || i >= total) return fail(400, "Sesión no válida.");
-          // el cliente manda el curso que tiene en pantalla: si el profe lo cambió en otro sitio, que recargue antes de marcar en la casilla equivocada
-          const cu = (await getCourse()).units;
-          if (count !== cu.length || total !== cu[g].sessions.length) return fail(409, "El curso de la clase ha cambiado. Vuelve a cargar la página.");
-          return done_(await mutate(q[1], (s) => {
+          return done_(await mutate(q[1], (s, c) => {
+          // el cliente manda la versión del curso que tiene en pantalla: si cambió, que recargue antes de marcar en la casilla equivocada
+          if (String(b.rev ?? "0") !== revOf(c) || count !== c.units.length || total !== c.units[g].sessions.length) return fail(409, "El curso de la clase ha cambiado. Vuelve a cargar la página.");
           const grid = Array.isArray(s.gymSessionsData) ? s.gymSessionsData : [];
           while (grid.length < count) grid.push([]);
           const row = Array.isArray(grid[g]) ? grid[g] : [];
@@ -894,7 +918,7 @@ async function classHandler(req, context) {
             if (completed === total && !s.badges[g]) {
               s.badges[g] = true;
               pushNotice(s, { title: "¡Medalla Conquistada!", desc: "¡Has completado el 100% de " + clean(b.gymCity, 40) + "!", icon: "🏅" });
-            } else if (completed < total && s.badges[g]) s.badges[g] = false;
+            } else if (!done && completed < total && s.badges[g]) s.badges[g] = false; // marcar una sesión añadida después no quita la medalla ya ganada
           }
           }));
         }
@@ -944,8 +968,9 @@ async function classHandler(req, context) {
         if (!pu || ps >= pu.sessions.length) return fail(400, "Sesión no válida.");
         const pl = isObj(b.plan) ? b.plan : {};
         let full = false;
+        const pc = await getCourse();
         const plans = await update("board/plans", (cur) => {
-          const p = cur || {};
+          const p = syncPlans(cur, pc);
           if (!p[b.key] && Object.keys(p).length >= 300) { full = true; return undefined; }
           p[b.key] = { warmup: clean(pl.warmup, 300), main: clean(pl.main, 300), cooldown: clean(pl.cooldown, 300), material: clean(pl.material, 200) };
           return p;
@@ -989,8 +1014,9 @@ async function classHandler(req, context) {
         const top = Math.max(0, ...squads.map((q) => q.avg));
         if (top <= 0) return fail(400, "Nadie ha completado sesiones en esta unidad todavía.");
         let rec, exists = false;
-        await update("meta/units", (u) => {
-          const list = u?.list || [];
+        const uc = await getCourse();
+        await update("meta/units", (u0) => {
+          const u = syncUnits(u0, uc), list = u.list || [];
           const old = list.find((x) => x.g === g);
           if (old) { rec = old; exists = true; return undefined; }
           const winners = squads.filter((q) => q.avg === top).map((q) => q.f);
@@ -1002,7 +1028,7 @@ async function classHandler(req, context) {
           if (left.length >= winners.length) for (const f of winners) { const n = pick(left); left.splice(left.indexOf(n), 1); prizes[f] = { kind: "legend", name: n }; }
           else { const extra = { kind: pick(["choose", "day"]) }; for (const f of winners) prizes[f] = { ...extra }; }
           rec = { g, city, at: Date.now(), scores: Object.fromEntries(squads.map((q) => [q.f, Math.round(q.avg * 100) / 100])), winners, prizes, done: false };
-          return { list: [...list, rec].slice(-40) };
+          return { list: [...list, rec].slice(-40), cv: u.cv };
         });
         if (exists && rec.done) return fail(409, "Esta unidad ya está cerrada.");
         // reparte los premios; si se cortó a medias, se reanuda sin repetir a nadie
@@ -1010,7 +1036,7 @@ async function classHandler(req, context) {
           const f = FACTIONS.includes(x.faction) ? x.faction : "Rayo";
           applyUnitPrize(x, rec, rec.winners.includes(f) ? rec.prizes[f] : null);
         })));
-        await update("meta/units", (u) => ({ list: (u?.list || []).map((x) => (x.g === g ? { ...x, done: true } : x)) }));
+        await update("meta/units", (u0) => { const u = syncUnits(u0, uc); return { ...u, list: (u.list || []).map((x) => (x.g === g ? { ...x, done: true } : x)) }; });
         const chest = { g, city: rec.city, winners: rec.winners, prizes: rec.prizes, at: Date.now() };
         await update("board/main", (cur) => ({ ...withBoard(cur), chest }));
         return json({ record: { ...rec, done: true } });
@@ -1248,7 +1274,7 @@ async function teacherAccount(req, path, method, ip, session) {
       const c = await getClass(b.to);
       // cada clase tiene su curso: el progreso se recoloca por id de unidad (la plantilla usa u1..u8 en todas)
       const ca = await courseOf(b.from), cb = await courseOf(b.to);
-      const fix = (d) => { const x = structuredClone(d); remapStudent(x, ca, cb); return x; };
+      const fix = (d) => { const x = syncStudent(structuredClone(d), ca); remapProgress(x, idsOf(ca), cb); return x; };
       // si el alumno cambia algo mientras se copia, se vuelve a copiar
       for (let i = 0; ; i++) {
         const mail = await raw.get(src + "mail/" + b.id, { type: "json" });
