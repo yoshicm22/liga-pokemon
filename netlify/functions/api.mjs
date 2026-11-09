@@ -1288,7 +1288,8 @@ async function teacherAccount(req, path, method, ip, session) {
         await raw.setJSON(dst + "students/" + b.id, { ...fix(cur.data), school: c?.school || cur.data.school });
         if (mail) await raw.setJSON(dst + "mail/" + b.id, mail);
         const again = await raw.getWithMetadata(src + "students/" + b.id, { type: "json" });
-        if (!again || again.etag === cur.etag || i >= 4) break;
+        if (!again || again.etag === cur.etag) break;
+        if (i >= 4) throw new Error("conflicto: el alumno no para de cambiar"); // mejor no mover que perder su último cambio
         cur = again;
       }
     } catch (e) {
@@ -1345,6 +1346,7 @@ export default async (req, context) => {
     if (e?.status === 413) return fail(413, "Petición demasiado grande.");
     if (e?.status === 400) return fail(400, "Petición no válida.");
     console.error(e);
+    if (String(e?.message).startsWith("conflicto")) return fail(503, "Hay mucha actividad, inténtalo otra vez.");
     return fail(500, "Error del servidor.");
   }
 };
