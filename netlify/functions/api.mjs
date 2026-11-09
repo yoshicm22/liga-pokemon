@@ -1,14 +1,85 @@
-// API de la Liga del Movimiento - Kanto (Netlify Functions v2 + Netlify Blobs)
+// API de la Liga del Movimiento - VERSIÓN GLOBAL (cualquier profe, varias clases de cualquier curso)
 // Variables de entorno en Netlify:
-//   TEACHER_PASSWORD  (obligatoria)  contraseña del panel del profesor
-//   CLASS_CODE        (opcional)     código que deben escribir los alumnos al registrarse
+//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  base de datos (tabla kv de supabase/kv.sql). Sin ellas usa Netlify Blobs.
 //   SESSION_SECRET    (opcional)     si no existe, se genera y se guarda sola
 
 import { getStore } from "@netlify/blobs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 
+/* ---------- almacén: Postgres (Supabase) con el mismo interfaz que Netlify Blobs ---------- */
+function pgStore() {
+  const base = process.env.SUPABASE_URL.replace(/\/+$/, "") + "/rest/v1/kv";
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const h = (extra) => ({ apikey: k, authorization: "Bearer " + k, "content-type": "application/json", ...extra });
+  const eq = (key) => "key=eq." + encodeURIComponent(key); // con eq. PostgREST toma el valor tal cual (las comillas solo cuentan dentro de in.(...))
+  // cada escritura pone una versión nueva al azar: es el "etag" para escribir solo si nadie escribió entre medias
+  const ver = () => crypto.randomInt(1, 2 ** 47);
+  async function call(url, opt = {}) {
+    const r = await fetch(url, { ...opt, headers: h(opt.headers) });
+    if (!r.ok && r.status !== 409) throw new Error(`base de datos ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return r;
+  }
+  const db = {
+    async getWithMetadata(key) {
+      const [row] = await (await call(`${base}?select=value,ver&${eq(key)}`)).json();
+      return row ? { data: row.value, etag: String(row.ver) } : null;
+    },
+    async get(key) { return (await db.getWithMetadata(key))?.data ?? null; },
+    async set(key, v, o) { return db.setJSON(key, v, o); },
+    async setJSON(key, value, o = {}) {
+      if (o.onlyIfNew) {
+        const r = await call(base, { method: "POST", headers: { prefer: "return=minimal" }, body: JSON.stringify({ key, value, ver: ver() }) });
+        return { modified: r.status !== 409 };
+      }
+      if (o.onlyIfMatch) {
+        const r = await call(`${base}?${eq(key)}&ver=eq.${encodeURIComponent(o.onlyIfMatch)}`, { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify({ value, ver: ver() }) });
+        return { modified: (await r.json()).length > 0 };
+      }
+      await call(`${base}?on_conflict=key`, { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ key, value, ver: ver() }) });
+      return { modified: true };
+    },
+    async delete(key) { await call(`${base}?${eq(key)}`, { method: "DELETE" }); },
+    // la columna key usa collate "C": el rango [prefijo, prefijo+U+FFFF) son justo las claves que empiezan por el prefijo
+    async list({ prefix }) {
+      // Supabase devuelve como mucho 1000 filas por petición: se pide por páginas
+      const blobs = [];
+      for (let off = 0; ; off += 1000) {
+        const r = await call(`${base}?select=key&key=gte.${encodeURIComponent(prefix)}&key=lt.${encodeURIComponent(prefix + "\uffff")}&order=key&limit=1000&offset=${off}`);
+        const rows = await r.json();
+        blobs.push(...rows.map((x) => ({ key: x.key })));
+        if (rows.length < 1000) return { blobs };
+      }
+    },
+  };
+  return db;
+}
+let pg;
 // getStore se crea al usarlo (dentro de una petición), como pide Netlify
-const store = new Proxy({}, { get: (_, p) => { const s = getStore({ name: "liga-kanto", consistency: "strong" }); const v = s[p]; return typeof v === "function" ? v.bind(s) : v; } });
+const raw = new Proxy({}, { get: (_, p) => {
+  if (!process.env.SUPABASE_URL !== !process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("Falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY: pon las dos (o ninguna)."); const s = process.env.SUPABASE_URL ? (pg ||= pgStore()) : getStore({ name: "liga-kanto-global", consistency: "strong" }); const v = s[p]; return typeof v === "function" ? v.bind(s) : v; } });
+
+// Cada petición trabaja dentro de una clase: sus claves van con el prefijo c/<clase>/ sin que el resto del código lo sepa.
+// Las cuentas de profes, las clases, el secreto y los límites de intentos son comunes.
+const scope = new AsyncLocalStorage();
+const GLOBAL_KEY = /^(meta\/secret$|rl\/|teachers\/|temail\/|classes\/|ccode\/)/;
+const pre = (k) => {
+  if (GLOBAL_KEY.test(k)) return k;
+  const c = scope.getStore();
+  if (!c) throw new Error("clave de clase sin clase: " + k);
+  return `c/${c}/${k}`;
+};
+const store = {
+  get: (k, o) => raw.get(pre(k), o),
+  getWithMetadata: (k, o) => raw.getWithMetadata(pre(k), o),
+  set: (k, v, o) => raw.set(pre(k), v, o),
+  setJSON: (k, v, o) => raw.setJSON(pre(k), v, o),
+  delete: (k) => raw.delete(pre(k)),
+  async list({ prefix }) {
+    const p = pre(prefix), cut = p.length - prefix.length;
+    return { blobs: (await raw.list({ prefix: p })).blobs.map((b) => ({ key: b.key.slice(cut) })) };
+  },
+};
 
 const FACTIONS = ["Rayo", "Cascada", "Roca"];
 const STUDENT_TTL = 3 * 60 * 60 * 1000;
@@ -121,26 +192,27 @@ async function update(key, fn, tries = 8) {
 
 /* ---------- límite de intentos (atómico: cuenta ANTES de comprobar) ---------- */
 const rlKey = (k) => "rl/" + sha(k).slice(0, 32);
-async function attempt(key, max, windowMs, lockMs) {
+// maxLockMs > lockMs: cada bloqueo seguido dura el doble (hasta maxLockMs). failOpen: si no se puede contar, se deja pasar
+async function attempt(key, max, windowMs, lockMs, maxLockMs = lockMs, failOpen = true) {
   const now = Date.now();
   let r;
   // 25 tablets a la vez pelean por este contador: más reintentos y, si aun así no se puede contar, se deja pasar (nunca dejar fuera a un niño)
   try {
     r = await update(rlKey(key), (cur) => {
       if (cur?.until && cur.until > now) return undefined;
-      const x = cur && now - cur.first < windowMs && !cur.until ? cur : { count: 0, first: now };
+      const x = cur && now - cur.first < windowMs && !cur.until ? cur : { count: 0, first: now, lv: cur?.lv || 0 };
       x.count++;
-      if (x.count > max) x.until = now + lockMs;
+      if (x.count > max) { x.lv = (x.lv || 0) + 1; x.until = now + Math.min(lockMs * 2 ** (x.lv - 1), maxLockMs); }
       return x;
     }, 30);
-  } catch { return { ok: true }; }
+  } catch { return { ok: failOpen, mins: 1 }; }
   if (r === null || (r.until && r.until > now)) {
     const cur = await store.get(rlKey(key), { type: "json" });
     return { ok: false, mins: Math.max(1, Math.ceil(((cur?.until || now) - now) / 60000)) };
   }
   return { ok: true };
 }
-const bump = async (key, max, windowMs) => (await attempt(key, max, windowMs, windowMs)).ok;
+const bump = async (key, max, windowMs, failOpen = true) => (await attempt(key, max, windowMs, windowMs, windowMs, failOpen)).ok;
 const clearAttempts = (key) => store.delete(rlKey(key));
 
 /* ---------- datos ---------- */
@@ -165,14 +237,16 @@ const shortName = (n) => {
   return parts.length > 1 ? `${parts[0]} ${[...parts[1]][0].toUpperCase()}.` : (parts[0] || "");
 };
 const nameKeyOf = (name) => "names/" + sha(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim()).slice(0, 32);
-const getStudent = (id) => store.get("students/" + id, { type: "json" });
+const getStudent = async (id) => { const s = await store.get("students/" + id, { type: "json" }); return s && syncStudent(s, await getCourse()); };
 const putStudent = (p) => store.setJSON("students/" + p.id, p);
-// cambia un alumno de forma atómica; fn recibe el alumno y puede devolver un Response de error
+// cambia un alumno de forma atómica, ya pasado a la versión actual del curso; fn(alumno, curso) puede devolver un Response de error
 async function mutate(id, fn) {
   let res;
+  const c = await getCourse();
   const out = await update("students/" + id, async (s) => {
     if (!s) { res = fail(404, "Alumno no encontrado."); return undefined; }
-    const r = await fn(s);
+    syncStudent(s, c);
+    const r = await fn(s, c);
     if (r instanceof Response) { res = r; return undefined; }
     return s;
   });
@@ -180,16 +254,106 @@ async function mutate(id, fn) {
 }
 async function allStudents() {
   const { blobs } = await store.list({ prefix: "students/" });
-  const list = await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })));
-  return list.filter(Boolean).sort((a, b) => String(a.name).localeCompare(String(b.name), "es"));
+  const [list, c] = await Promise.all([Promise.all(blobs.map((b) => store.get(b.key, { type: "json" }))), getCourse()]);
+  return list.filter(Boolean).map((s) => syncStudent(s, c)).sort((a, b) => String(a.name).localeCompare(String(b.name), "es"));
 }
 const getConfig = async () => normCfg(await store.get("config/main", { type: "json" }));
 function normCfg(c0) {
   const c = c0 || {};
   return {
-    currentWeek: Number.isInteger(c.currentWeek) && c.currentWeek >= 1 && c.currentWeek <= 33 ? c.currentWeek : 1,
+    currentWeek: intIn(c.currentWeek, 1, MAX_WEEK) ? c.currentWeek : 1,
   };
 }
+
+/* ---------- curso de la clase: unidades (gimnasios), sesiones y calendario ---------- */
+// Plantilla por defecto = los 8 gimnasios de siempre. Debe coincidir con KANTO_UNITS de public/index.html (lo comprueba tests/global.test.mjs)
+export const KANTO_UNITS = [{"id": "u1", "name": "Ciudad Plateada", "icon": "ball-poke", "badgeName": "Medalla Roca 🪨", "sessions": ["1. Presentación.", "2. Antropometría.", "3. Dinámicas.", "4. Calentamiento 1.", "5. Calentamiento 2.", "6. Cooperativos 1.", "7. Cooperativos 2.", "8. Cooperativos 3.", "9. SA"]}, {"id": "u2", "name": "Ciudad Celeste", "icon": "ball-great", "badgeName": "Medalla Cascada 💧", "sessions": ["1. Higiene.", "2. Lateralidad.", "3. Corporal.", "4. Espacio.", "5. Equilibrio estático.", "6. Dinámico.", "7. Ruedas 1.", "8. Ruedas 2.", "9. Ruedas 3.", "10. SA 1.", "11. SA 2.", "12. Evaluación."]}, {"id": "u3", "name": "Ciudad Vermilion", "icon": "ball-ultra", "badgeName": "Medalla Rayo ⚡", "sessions": ["1. Intro.", "2. Cuadrupedia.", "3. Reptación.", "4. Trepa.", "5. Saltos.", "6. Comba.", "7. Volteretas 1.", "8. Volteretas 2.", "9. Lanzamientos 1.", "10. Lanzamientos 2.", "11. Golpeos.", "12. Blocajes.", "13. SA 1.", "14. SA 2.", "15. SA 3.", "16. Eval."]}, {"id": "u4", "name": "Ciudad Fucsia", "icon": "ball-master", "badgeName": "Medalla Arcoíris 🌈", "sessions": ["1. Intro.", "2. Fuerza 1.", "3. Fuerza 2.", "4. Velocidad 1.", "5. Velocidad 2.", "6. Resistencia 1.", "7. Resistencia 2.", "8. Flexibilidad.", "9. SA 1.", "10. SA 2.", "11. SA 3.", "12. Circuito."]}, {"id": "u5", "name": "Ciudad Azafrán", "icon": "ball-luxury", "badgeName": "Medalla Pantano 🔮", "sessions": ["1. Intro.", "2. Expresivos.", "3. Impro 1.", "4. Impro 2.", "5. Rítmicos.", "6. Teatrillo.", "7. Drama.", "8. Concurso.", "9. SA 1.", "10. SA 2.", "11. SA 3.", "12. Eval."]}, {"id": "u6", "name": "Pueblo Lavanda", "icon": "ball-premier", "badgeName": "Medalla Alma 🧠", "sessions": ["1. Material.", "2. Bádminton 1.", "3. Bádminton 2.", "4. Torneo Bádminton.", "5. Suaviball 1.", "6. Suaviball 2.", "7. Torneo Suaviball.", "8. SA 1.", "9. SA 2.", "10. SA 3.", "11. Eval Bádminton.", "12. Eval Suaviball."]}, {"id": "u7", "name": "Isla Canela", "icon": "ball-dive", "badgeName": "Medalla Volcán 🦾", "sessions": ["1. Intro.", "2. Datchball 1.", "3. Datchball 2.", "4. Bijbol 1.", "5. Bijbol 2.", "6. SA 1.", "7. SA 2.", "8. SA 3.", "9. Juegos 1.", "10. Juegos 2.", "11. Torneos.", "12. Eval."]}, {"id": "u8", "name": "Ciudad Verde", "icon": "ball-timer", "badgeName": "Medalla Tierra 🤝", "sessions": ["1. Intro.", "2. Mapas 1.", "3. Mapas 2.", "4. Orientación 1.", "5. Orientación 2.", "6. Orientación 3.", "7. Escalada 1.", "8. Escalada 2.", "9. SA 1.", "10. SA 2.", "11. Antropometría.", "12. Salida natural."]}];
+const MAX_UNITS = 12, MAX_SES = 30, MAX_WEEK = 400, IMG_MAX = 60 * 1024;
+const schoolStart = () => { const [y, m] = madridDay(Date.now()).split("-").map(Number); return `${m >= 9 ? y : y - 1}-09-01`; };
+const defaultCourse = () => ({ units: structuredClone(KANTO_UNITS), days: [2, 3, 5], start: schoolStart(), off: [], autoSession: false, rev: "0" });
+const courseOk = (c) => isObj(c) && Array.isArray(c.units) && c.units.length > 0;
+const courseOf = async (cid) => { const c = await raw.get(`c/${cid}/config/course`, { type: "json" }); return courseOk(c) ? c : defaultCourse(); };
+const getCourse = () => courseOf(scope.getStore());
+const IMG_RE = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+// valida el curso que manda el profe; devuelve el curso limpio o el texto del error
+function courseFields(b) {
+  if (!isObj(b)) return "Curso no válido.";
+  const us = b.units;
+  if (!Array.isArray(us) || us.length < 1 || us.length > MAX_UNITS) return `El curso debe tener entre 1 y ${MAX_UNITS} unidades.`;
+  const units = [], ids = new Set();
+  for (const [k, u] of us.entries()) {
+    const n = k + 1;
+    if (!isObj(u) || typeof u.id !== "string" || !/^[\w-]{1,16}$/.test(u.id) || ids.has(u.id)) return `La unidad ${n} no es válida.`;
+    ids.add(u.id);
+    if (typeof u.name !== "string" || !clean(u.name, 40)) return `Escribe el nombre de la unidad ${n}.`;
+    if (typeof u.icon !== "string" || !/^(img:|[a-z0-9-]{1,30})$/.test(u.icon)) return `Elige un icono para la unidad ${n}.`;
+    let img = null;
+    if (u.img != null && u.img !== "") {
+      const m = typeof u.img === "string" && IMG_RE.exec(u.img);
+      if (!m || Math.floor((m[2].length * 3) / 4) > IMG_MAX) return `La imagen de la unidad ${n} no vale: tiene que ser PNG, JPG o WEBP de 60 KB como mucho.`;
+      img = u.img;
+    }
+    if (u.icon === "img:" && !img) return `Falta la imagen de la unidad ${n}.`;
+    if ("badgeName" in u && typeof u.badgeName !== "string") return `El nombre de la medalla de la unidad ${n} no es válido.`;
+    const ses = u.sessions;
+    if (!Array.isArray(ses) || ses.length < 1 || ses.length > MAX_SES || !ses.every((x) => typeof x === "string")) return `La unidad ${n} debe tener entre 1 y ${MAX_SES} sesiones.`;
+    const name = clean(u.name, 40);
+    units.push({ id: u.id, name, icon: u.icon, ...(img ? { img } : {}), badgeName: clean(u.badgeName, 40) || clean("Medalla " + name, 40), sessions: ses.map((x, i) => clean(x, 80) || `Sesión ${i + 1}`) });
+  }
+  const days = b.days;
+  if (!Array.isArray(days) || days.length < 1 || days.length > 5 || !days.every((d) => intIn(d, 1, 7)) || new Set(days).size !== days.length) return "Elige entre 1 y 5 días de clase a la semana.";
+  if (!dateOk(b.start)) return "Elige la fecha del primer día de clase.";
+  if (b.end != null && b.end !== "" && (!dateOk(b.end) || b.end < b.start)) return "La fecha de fin tiene que ser después del inicio.";
+  if (!Array.isArray(b.off) || b.off.length > 200 || !b.off.every(dateOk)) return "Hay días sin clase que no son fechas válidas (máximo 200).";
+  if (typeof b.autoSession !== "boolean") return "Elige cómo se calcula la sesión de hoy.";
+  if ("name" in b && typeof b.name !== "string") return "El nombre de la clase no es válido.";
+  const name = clean(b.name, 60);
+  return { ...(name ? { name } : {}), units, days: [...days].sort((x, y) => x - y), start: b.start, ...(b.end ? { end: b.end } : {}), off: [...new Set(b.off)].sort(), autoSession: b.autoSession };
+}
+// Versiones del curso: cada guardado lleva un rev único y config/course guarda los ids de unidades de las últimas versiones (hist).
+// El progreso de cada alumno, los planes y las unidades cerradas llevan la versión en la que están (cv; sin cv = la plantilla "0")
+// y se pasan a la actual por id al leerlos o cambiarlos: si un guardado se corta a medias, lo que falta se completa solo.
+const HIST_KEEP = 40;
+const revOf = (c) => String(c?.rev ?? "0");
+const idsOf = (c) => c.units.map((u) => u.id);
+// shortcut: una versión más vieja que las HIST_KEEP últimas se toma con el orden actual (por posición); si pasa, subir HIST_KEEP
+const oldIds = (c, rev) => (rev === revOf(c) ? idsOf(c) : Array.isArray(c.hist?.[rev]) ? c.hist[rev] : rev === "0" ? KANTO_UNITS.map((u) => u.id) : idsOf(c));
+// índice nuevo -> índice viejo de cada unidad (por su id estable); -1 si la unidad es nueva
+const unitMap = (ids, c) => c.units.map((u) => ids.indexOf(u.id));
+// pasa el progreso de un alumno (en el orden de unidades ids) al curso c: unidad quitada = se pierde su progreso,
+// sesiones recortadas = se recortan, nuevas = sin hacer; la medalla se conserva mientras la unidad exista
+function remapProgress(s, ids, c) {
+  const map = unitMap(ids, c), back = new Map(map.map((o, n) => [o, n]).filter(([o]) => o >= 0));
+  const ng = (g) => (back.has(g) ? back.get(g) : -1);
+  const grid = Array.isArray(s.gymSessionsData) ? s.gymSessionsData : [], bd = Array.isArray(s.badges) ? s.badges : [];
+  s.gymSessionsData = c.units.map((u, n) => Array.from({ length: u.sessions.length }, (_, i) => map[n] >= 0 && Array.isArray(grid[map[n]]) && !!grid[map[n]][i]));
+  s.badges = c.units.map((u, n) => map[n] >= 0 && !!bd[map[n]]);
+  if (isObj(s.unitsDone)) s.unitsDone = Object.fromEntries(Object.keys(s.unitsDone).map((g) => [ng(Number(g)), 1]).filter(([g]) => g >= 0));
+  for (const k of ["trophies", "pendingChests", "pendingChoice"]) if (Array.isArray(s[k])) s[k] = s[k].map((x) => (isObj(x) && Number.isInteger(x.g) ? { ...x, g: ng(x.g) } : x));
+  if (typeof s.superballCell === "string") {
+    const [g, i] = s.superballCell.split("-").map(Number), n = ng(g);
+    if (n >= 0 && i < c.units[n].sessions.length) s.superballCell = n + "-" + i; else delete s.superballCell;
+  }
+  s.cv = revOf(c);
+}
+// pone al alumno en la versión del curso c (en memoria)
+const syncStudent = (s, c) => { const r = String(s.cv ?? "0"); if (r !== revOf(c)) remapProgress(s, oldIds(c, r), c); return s; };
+const syncPlans = (p, c) => {
+  const r = String(p?._cv ?? "0");
+  if (!p || r === revOf(c)) return p || {};
+  const map = unitMap(oldIds(c, r), c), out = { _cv: revOf(c) };
+  map.forEach((o, n) => { if (o >= 0) for (let i = 0; i < c.units[n].sessions.length; i++) if (p[o + "-" + i]) out[n + "-" + i] = p[o + "-" + i]; });
+  return out;
+};
+// una unidad quitada deja su registro con g = -1: sus legendarios siguen contando como entregados
+const syncUnits = (u, c) => {
+  const l = isObj(u) ? u : { list: [] }, r = String(l.cv ?? "0");
+  if (r === revOf(c)) return l;
+  const map = unitMap(oldIds(c, r), c), back = new Map(map.map((o, n) => [o, n]).filter(([o]) => o >= 0));
+  return { list: (l.list || []).map((x) => ({ ...x, g: back.has(x.g) ? back.get(x.g) : -1 })), cv: revOf(c) };
+};
+const histOk = (h) => isObj(h) && Object.keys(h).length <= HIST_KEEP + 1 && Object.entries(h).every(([k, v]) => /^\w{1,40}$/.test(k) && Array.isArray(v) && v.length <= MAX_UNITS && v.every((x) => typeof x === "string" && /^[\w-]{1,16}$/.test(x)));
+
 function factionTotals(students) {
   const t = Object.fromEntries(FACTIONS.map((f) => [f, 0]));
   for (const s of students) {
@@ -218,7 +382,8 @@ async function saveBackup(name) {
   const drop = [...daily.slice(0, Math.max(0, daily.length - BACKUP_KEEP)), ...undo.slice(0, Math.max(0, undo.length - UNDO_KEEP))];
   await Promise.all(drop.map((n) => store.delete("backups/" + n)));
 }
-// una copia al día, la primera vez que el profe entra
+// una copia al día por clase, la primera vez que el profe la abre
+const backupDone = new Map(); // clase -> día ya copiado (en esta instancia de la función)
 async function dailyBackup() {
   const day = madridDay(Date.now());
   if (!(await backupList()).includes(day)) await saveBackup(day);
@@ -228,10 +393,13 @@ async function restoreSnapshot(snap) {
   if (snap?.app !== "liga-kanto" || !isObj(snap.data)) return "Esta copia no es de la Liga Kanto.";
   const ok = (k, v) => v !== null && typeof v === "object" && (k === "meta/att-closed" ? Array.isArray(v) : isObj(v)) && (k !== "meta/units" || Array.isArray(v.list));
   let entries = Object.entries(snap.data).filter(([k, v]) => backupKeyOk(k) && ok(k, v));
+  // el curso (unidades y calendario) se valida igual que al guardarlo
+  const ci = entries.findIndex(([k]) => k === "config/course");
+  if (ci >= 0) { const f = courseFields(entries[ci][1]); if (typeof f === "string") return "La copia tiene un curso dañado: " + f; const v = entries[ci][1], rv = String(v.rev ?? "0"); if (!/^\w{1,40}$/.test(rv) || (v.hist !== undefined && !histOk(v.hist))) return "La copia tiene un curso dañado."; entries[ci] = ["config/course", { ...f, rev: rv, ...(v.hist ? { hist: v.hist } : {}) }]; }
   if (entries.length > 3000) return "La copia es demasiado grande.";
   const students = entries.filter(([k]) => k.startsWith("students/")).map(([, v]) => v);
   if (!students.length) return "La copia no tiene alumnos.";
-  if (entries.some(([k, v]) => k.startsWith("students/") && "students/" + v.id !== k)) return "La copia tiene alumnos dañados.";
+  if (entries.some(([k, v]) => k.startsWith("students/") && ("students/" + v.id !== k || !/^names\/[0-9a-f]{32}$/.test(v.nameKey)))) return "La copia tiene alumnos dañados.";
   // una reserva de nombre sin su alumno dejaría ese nombre bloqueado para siempre
   const used = new Set(students.map((x) => x.nameKey));
   entries = entries.filter(([k]) => !k.startsWith("names/") || used.has(k));
@@ -243,6 +411,8 @@ async function restoreSnapshot(snap) {
   await Promise.all(entries.map(([k, v]) => store.setJSON(k, v)));
   await Promise.all(Object.keys(now).filter((k) => !keep.has(k)).map((k) => store.delete(k)));
   await update("meta/epoch", (e) => (e || 0) + 1); // los alumnos vuelven a entrar con los datos restaurados
+  const cn = entries.find(([k]) => k === "config/course")?.[1]?.name || "";
+  await updateRaw("classes/" + scope.getStore(), (x) => ({ ...x, name: cn }));
   return null;
 }
 
@@ -250,7 +420,7 @@ async function restoreSnapshot(snap) {
 const LEGENDS = ["Articuno", "Zapdos", "Moltres", "Dragonite", "Mewtwo", "Mew"];
 const CONSOLATION = Object.keys(POKE_COST).filter((n) => POKE_COST[n] >= 2 && POKE_COST[n] <= 3);
 const pick = (a) => a[crypto.randomInt(a.length)];
-const getUnits = async () => (await store.get("meta/units", { type: "json" })) || { list: [] };
+const getUnits = async () => syncUnits(await store.get("meta/units", { type: "json" }), await getCourse());
 const mastered = (s, g) => (Array.isArray(s.gymSessionsData?.[g]) ? s.gymSessionsData[g].filter(Boolean).length : 0);
 function giveMon(s, name, shiny) {
   s.ownedPokemon = Array.isArray(s.ownedPokemon) ? s.ownedPokemon : ["Pikachu"];
@@ -315,7 +485,7 @@ const DEFAULT_TIMER = { mode: "countdown", status: "idle", durationSec: 300, sta
 const DEFAULT_BOARD = { noise: "green", behavior: 0, effort: 0, phase: 0, absent: [], drawn: [], draw: null, cup: null, timer: DEFAULT_TIMER };
 const withBoard = (b) => ({ ...DEFAULT_BOARD, ...(b || {}), timer: { ...DEFAULT_TIMER, ...(b?.timer || {}) } });
 const getBoard = async () => withBoard(await store.get("board/main", { type: "json" }));
-const getPlans = async () => (await store.get("board/plans", { type: "json" })) || {};
+const getPlans = async () => syncPlans(await store.get("board/plans", { type: "json" }), await getCourse());
 const intIn = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 function applyBoard(bd, b) {
   if (b.chest === null) delete bd.chest;
@@ -399,7 +569,7 @@ const EVAL_KEEP = 60;
 const face = (v) => Number.isInteger(v) && v >= 1 && v <= 3;
 
 /* ---------- manejador ---------- */
-export default async (req, context) => {
+async function classHandler(req, context) {
   try {
     const url = new URL(req.url);
     const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/";
@@ -412,16 +582,15 @@ export default async (req, context) => {
       return json({
         students: students.map((s) => ({ id: s.id, name: shortName(s.name), school: s.school, gender: s.gender, faction: s.faction, badges: s.badges || [] })),
         config: await getConfig(),
+        course: await getCourse(),
         factionTotals: factionTotals(students),
-        requiresCode: true,
+        class: await (async () => { const c = await getClass(scope.getStore()); return { grade: c.grade, group: c.group, school: c.school, name: c.name || "" }; })(),
       });
     }
 
     if (method === "POST" && path === "/register") {
       const b = await readBody(req);
-      if (!process.env.CLASS_CODE) return fail(503, "Falta configurar CLASS_CODE en Netlify (código de clase para registrarse).");
       if (!(await bump("reg:" + ip, 60, 60 * 60 * 1000))) return fail(429, "Demasiados registros desde esta red. Inténtalo más tarde.");
-      if (!safeEqual(b.classCode ?? "", process.env.CLASS_CODE)) return fail(403, "Código de clase incorrecto.");
       const name = clean(b.name, 30);
       const password = String(b.password ?? "");
       if (name.length < 2) return fail(400, "Escribe tu nombre (mínimo 2 letras).");
@@ -430,6 +599,7 @@ export default async (req, context) => {
       const nameKey = nameKeyOf(name);
       const dupMsg = "Ya existe un alumno con ese nombre. Añade tu inicial o apellido.";
       const existing = await allStudents();
+      if (existing.length >= 60) return fail(400, "Esta clase ya tiene 60 alumnos. Habla con tu profe.");
       if (existing.some((s) => s.name.toLowerCase() === name.toLowerCase())) return fail(409, dupMsg);
       // la reserva del nombre es atómica: dos registros a la vez no pasan los dos
       const res = await store.setJSON(nameKey, { t: Date.now() }, { onlyIfNew: true });
@@ -437,18 +607,18 @@ export default async (req, context) => {
       const profile = {
         id: "student_" + crypto.randomBytes(8).toString("hex"),
         name,
-        school: clean(b.school, 40) || "Colegio Kanto",
+        school: clean(b.school, 40) || (await getClass(scope.getStore()))?.school || "",
         gender: b.gender === "girl" ? "girl" : "boy",
         faction: FACTIONS.includes(b.faction) ? b.faction : "Rayo",
         passHash: hashPw(password),
         tokens: 0, weight: "", height: "", wingspan: "", hrRest: "", theme: "emerald",
-        gymSessionsData: [], badges: [false, false, false, false, false, false, false, false],
+        gymSessionsData: [], badges: (await getCourse()).units.map(() => false), cv: revOf(await getCourse()),
         ownedPokemon: ["Pikachu"], activeTeam: ["Pikachu", null, null, null, null, null],
         redeemedRewards: [], dailyQuestStatus: {}, achievements: {}, shinyPokemon: [], pendingNotifications: [],
         createdAt: Date.now(), nameKey,
       };
       await putStudent(profile);
-      const token = await sign({ role: "student", sid: profile.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
+      const token = await sign({ role: "student", sid: profile.id, cid: scope.getStore(), ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
       return json({ token, profile: await viewOf(profile) }, 201);
     }
 
@@ -461,25 +631,13 @@ export default async (req, context) => {
       const s = id ? await getStudent(id) : null;
       if (!s) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!"); // sin crear registros para ids inventados
       // 10 fallos cada 5 min y bloqueo corto: frena la fuerza bruta sin dejar a un niño fuera mucho rato si un compañero le fastidia
-      const a1 = await attempt(`login:${id}`, 10, 5 * 60 * 1000, 3 * 60 * 1000);
+      // cada bloqueo seguido dura el doble (máx. 1 h); acertar lo reinicia
+      const a1 = await attempt(`login:${id}`, 10, 5 * 60 * 1000, 3 * 60 * 1000, 60 * 60 * 1000);
       if (!a1.ok) return fail(429, `Demasiados intentos con este perfil. Espera ${a1.mins} min.`);
       if (!checkPw(b.password ?? "", s.passHash)) return fail(401, "Código incorrecto. ¡Inténtalo otra vez!");
       await clearAttempts(`login:${id}`);
-      const token = await sign({ role: "student", sid: s.id, ep: await getEpoch(), exp: Date.now() + STUDENT_TTL });
+      const token = await sign({ role: "student", sid: s.id, cid: scope.getStore(), ep: await getEpoch(), pv: s.pv || 0, exp: Date.now() + STUDENT_TTL });
       return json({ token, profile: await viewOf(s) });
-    }
-
-    if (method === "POST" && path === "/teacher/login") {
-      const b = await readBody(req);
-      if (!process.env.TEACHER_PASSWORD) return fail(503, "Falta configurar TEACHER_PASSWORD en Netlify.");
-      // por IP y sin tope global (un tope global dejaba fuera al profesor con unos pocos intentos anónimos)
-      const a1 = await attempt(`teacher:${ip}`, 10, 5 * 60 * 1000, 2 * 60 * 1000);
-      if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
-      if (!safeEqual(b.password ?? "", process.env.TEACHER_PASSWORD)) return fail(401, "Contraseña incorrecta.");
-      await clearAttempts(`teacher:${ip}`);
-      // si la copia falla, el profe entra igual
-      try { await dailyBackup(); } catch (e) { console.error("copia diaria", e); }
-      return json({ token: await sign({ role: "teacher", exp: Date.now() + TEACHER_TTL }) });
     }
 
     /* --- a partir de aquí hace falta sesión --- */
@@ -488,13 +646,17 @@ export default async (req, context) => {
 
     /* --- alumno --- */
     if (session.role === "student") {
+      // si el profe cambió el código del alumno, las sesiones abiertas con el viejo dejan de valer (tokens sin pv = 0)
+      const stale = (s) => (s.pv || 0) !== (session.pv || 0);
+      const smut = (fn) => mutate(session.sid, (s) => (stale(s) ? fail(401, "Sesión caducada. Vuelve a entrar.") : fn(s)));
       if (path === "/me" && method === "GET") {
         const s = await getStudent(session.sid);
-        return s ? json({ profile: await viewOf(s) }) : fail(404, "Perfil no encontrado.");
+        if (s && stale(s)) return fail(401, "Sesión caducada. Vuelve a entrar.");
+        return s ? json({ profile: await viewOf(s) }) : fail(401, "Tu perfil ya no está en esta clase. Pide a tu profe el código de tu clase nueva.");
       }
       if (path === "/me" && method === "PUT") {
         const b = await readBody(req);
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const { redeemedRewards, ownedPokemon, activeTeam, shinyPokemon, ...rest } = b;
           applyCommon(s, rest);
           // las fichas las calcula el servidor: el cliente nunca dice cuántas tiene
@@ -532,7 +694,7 @@ export default async (req, context) => {
       }
       if (path === "/me/chest-seen" && method === "POST") {
         const b = await readBody(req);
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const q = s.pendingChests || [];
           // con dos dispositivos abiertos, cada uno cierra su propio cofre y no el del otro
           s.pendingChests = q.length && (b.g === undefined || q[0].g === b.g) ? q.slice(1) : q;
@@ -543,7 +705,7 @@ export default async (req, context) => {
         const b = await readBody(req);
         const name = clean(b.name, 60);
         if (!isPoke(name)) return fail(400, "Pokémon no válido.");
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const pc = Array.isArray(s.pendingChoice) ? s.pendingChoice : [];
           if (!pc.length) return fail(409, "No tienes ninguna elección pendiente.");
           if (POKE_COST[name] > (pc[0].maxCost || 4)) return fail(400, "Ese Pokémon es demasiado fuerte para esta elección.");
@@ -556,7 +718,7 @@ export default async (req, context) => {
       if (path === "/me/self-eval" && method === "POST") {
         const b = await readBody(req);
         if (!face(b.effort) || !face(b.fair)) return fail(400, "Elige una carita en cada pregunta.");
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           // se puede cambiar durante el día; se guardan los últimos EVAL_KEEP días
           const ev = { ...(isObj(s.selfEval) ? s.selfEval : {}), [madridDay(Date.now())]: [b.effort, b.fair] };
           s.selfEval = Object.fromEntries(Object.entries(ev).sort(([x], [y]) => x.localeCompare(y)).slice(-EVAL_KEEP));
@@ -568,7 +730,7 @@ export default async (req, context) => {
         const id = b.id;
         if (!Object.hasOwn(ITEM_COST, id) || !["buy", "use"].includes(b.action)) return fail(400, "Objeto no válido.");
         const today = madridDay(Date.now());
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const items = { pocion: 0, superball: 0, ...(isObj(s.items) ? s.items : {}) };
           if (b.action === "buy") {
             if (items[id] >= ITEM_MAX) return fail(409, `Ya llevas ${ITEM_MAX} en la mochila. Usa uno antes de comprar otro.`);
@@ -594,7 +756,7 @@ export default async (req, context) => {
         const b = await readBody(req);
         const line = COMPANIONS.find((l) => l[0] === b.name);
         if (!line) return fail(400, "Ese Pokémon no puede ser tu compañero.");
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           if (s.companion) return fail(409, "Ya tienes compañero.");
           s.companion = { line: line[0], stage: 0 };
           giveMon(s, line[0], false);
@@ -603,7 +765,7 @@ export default async (req, context) => {
       }
       if (path === "/me/companion/evolve" && method === "POST") {
         const closed = await getAttClosed();
-        const out = await mutate(session.sid, (s) => {
+        const out = await smut((s) => {
           const c = s.companion, line = c && COMPANIONS.find((l) => l[0] === c.line);
           if (!line) return fail(409, "Todavía no tienes compañero.");
           if (c.stage >= 2) return fail(409, "Tu compañero ya está en su forma final.");
@@ -645,7 +807,32 @@ export default async (req, context) => {
     /* --- profesor --- */
     if (session.role === "teacher") {
       if (path === "/teacher/students" && method === "GET") {
-        return json({ students: (await allStudents()).map(teacherView), config: await getConfig(), attClosed: await getAttClosed(), units: (await getUnits()).list });
+        // la primera vez al día que se abre la clase se guarda una copia; si falla, se sigue igual
+        if (backupDone.get(scope.getStore()) !== madridDay(Date.now())) {
+          try { await dailyBackup(); backupDone.set(scope.getStore(), madridDay(Date.now())); } catch (e) { console.error("copia diaria", e); }
+        }
+        return json({ students: (await allStudents()).map(teacherView), config: await getConfig(), course: await getCourse(), attClosed: await getAttClosed(), units: (await getUnits()).list });
+      }
+      if (path === "/teacher/course" && method === "GET") return json({ course: await getCourse() });
+      if (path === "/teacher/course" && method === "PUT") {
+        const f = courseFields(await readBody(req, 1_500_000));
+        if (typeof f === "string") return fail(400, f);
+        if (JSON.stringify(f).length > 1_400_000) return fail(400, "El curso ocupa demasiado: usa imágenes más pequeñas.");
+        const cur = await store.getWithMetadata("config/course", { type: "json" });
+        const old = courseOk(cur?.data) ? cur.data : defaultCourse();
+        const hist = Object.fromEntries([...Object.entries(isObj(old.hist) ? old.hist : {}), [revOf(old), idsOf(old)]].slice(-HIST_KEEP));
+        const next = { ...f, rev: Date.now().toString(36) + crypto.randomBytes(4).toString("hex"), hist };
+        // primero se guarda el curso (solo si nadie lo cambió entre medias); después se recoloca todo hacia él
+        const r = await store.setJSON("config/course", next, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
+        if (r?.modified === false) return fail(409, "Otro dispositivo ha cambiado el curso a la vez. Vuelve a cargar la página.");
+        // si esto se corta, lo que falte se recoloca al leer o cambiar cada cosa (ver syncStudent)
+        await Promise.all((await allStudents()).map((s) => mutate(s.id, () => {})));
+        const c = await getCourse();
+        await update("board/plans", (p) => (p && String(p._cv ?? "0") !== revOf(c) ? syncPlans(p, c) : undefined));
+        await update("meta/units", (u) => (u && String(u.cv ?? "0") !== revOf(c) ? syncUnits(u, c) : undefined));
+        // el nombre libre también va en la ficha de la clase, para las listas de clases
+        await updateRaw("classes/" + scope.getStore(), (x) => ({ ...x, name: next.name || "" }));
+        return json({ course: next });
       }
       const m = path.match(/^\/teacher\/students\/([\w-]{1,60})$/);
       if (m && method === "PUT") {
@@ -665,7 +852,13 @@ export default async (req, context) => {
             newKey = k; oldKey = cur.nameKey;
           }
         }
-        const out = await mutate(m[1], (s) => {
+        const out = await mutate(m[1], (s, c) => {
+        if ("badges" in b || "gymSessionsData" in b) {
+          if (String(b.rev ?? "") !== revOf(c)) return fail(409, "El curso de la clase ha cambiado. Vuelve a cargar la página.");
+          const okB = !("badges" in b) || (Array.isArray(b.badges) && b.badges.length === c.units.length && b.badges.every((x) => typeof x === "boolean"));
+          const okG = !("gymSessionsData" in b) || (Array.isArray(b.gymSessionsData) && b.gymSessionsData.length === c.units.length && b.gymSessionsData.every((r, g) => Array.isArray(r) && r.length === c.units[g].sessions.length && r.every((x) => typeof x === "boolean")));
+          if (!okB || !okG) return fail(400, "Las medallas o las sesiones no encajan con el curso.");
+        }
         if (newKey) s.nameKey = newKey;
         // el profesor no toca lo que es del alumno (Pokémon, canjes, medidas...): evita pisar compras recientes
         if ("name" in b) { const n = clean(b.name, 30); if (n.length >= 2) s.name = n; }
@@ -675,16 +868,16 @@ export default async (req, context) => {
         for (const k of ["weight", "height", "wingspan", "hrRest"]) if (k in b) s[k] = clean(b[k], 8);
         if ("note" in b) s.note = clean(b.note, 500);
         if (Number.isFinite(b.tokens) && b.tokens >= 0 && b.tokens <= 9999) s.tokens = Math.floor(b.tokens);
-        if (Array.isArray(b.badges) && b.badges.length <= 20) s.badges = b.badges.map(Boolean);
-        if (Array.isArray(b.gymSessionsData) && b.gymSessionsData.length <= 20 && b.gymSessionsData.every(Array.isArray)) {
-          s.gymSessionsData = b.gymSessionsData.map((g) => g.slice(0, 20).map(Boolean));
-        }
+        if (Array.isArray(b.badges)) s.badges = [...b.badges];
+        if (Array.isArray(b.gymSessionsData)) s.gymSessionsData = b.gymSessionsData.map((g) => [...g]);
         if (Array.isArray(b.pendingNotifications) && b.pendingNotifications.length <= 50) {
           s.pendingNotifications = b.pendingNotifications.map((n) => ({ title: clean(n?.title, 80), desc: clean(n?.desc, 300), icon: clean(n?.icon, 8) }));
         }
-        if (typeof b.newPassword === "string" && b.newPassword.length) s.passHash = hashPw(b.newPassword);
+        if (typeof b.newPassword === "string" && b.newPassword.length) { s.passHash = hashPw(b.newPassword); s.pv = (s.pv || 0) + 1; }
         });
-        if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (oldKey) await store.delete(oldKey); }
+        if (newKey) { if (out instanceof Response) await store.delete(newKey); else if (/^names\/[0-9a-f]{32}$/.test(oldKey)) await store.delete(oldKey); }
+        // el profe le da un código nuevo: fuera el bloqueo por intentos, para que el niño pueda entrar ya
+        if (!(out instanceof Response) && typeof b.newPassword === "string" && b.newPassword.length) await clearAttempts(`login:${m[1]}`);
         return out instanceof Response ? out : json({ profile: teacherView(out) });
       }
       const q = path.match(/^\/teacher\/students\/([\w-]{1,60})\/(session|reward|bonus)$/);
@@ -693,8 +886,10 @@ export default async (req, context) => {
         const done_ = (out) => (out instanceof Response ? out : json({ profile: teacherView(out) }));
         if (q[2] === "session") {
           const g = b.gIndex, i = b.sIndex, total = b.gymTotal, count = b.gymCount;
-          if (!intIn(g, 0, 19) || !intIn(count, 1, 20) || g >= count || !intIn(total, 1, 20) || !intIn(i, 0, 19) || i >= total) return fail(400, "Sesión no válida.");
-          return done_(await mutate(q[1], (s) => {
+          if (!intIn(g, 0, MAX_UNITS - 1) || !intIn(count, 1, MAX_UNITS) || g >= count || !intIn(total, 1, MAX_SES) || !intIn(i, 0, MAX_SES - 1) || i >= total) return fail(400, "Sesión no válida.");
+          return done_(await mutate(q[1], (s, c) => {
+          // el cliente manda la versión del curso que tiene en pantalla: si cambió, que recargue antes de marcar en la casilla equivocada
+          if (String(b.rev ?? "0") !== revOf(c) || count !== c.units.length || total !== c.units[g].sessions.length) return fail(409, "El curso de la clase ha cambiado. Vuelve a cargar la página.");
           const grid = Array.isArray(s.gymSessionsData) ? s.gymSessionsData : [];
           while (grid.length < count) grid.push([]);
           const row = Array.isArray(grid[g]) ? grid[g] : [];
@@ -724,7 +919,7 @@ export default async (req, context) => {
             if (completed === total && !s.badges[g]) {
               s.badges[g] = true;
               pushNotice(s, { title: "¡Medalla Conquistada!", desc: "¡Has completado el 100% de " + clean(b.gymCity, 40) + "!", icon: "🏅" });
-            } else if (completed < total && s.badges[g]) s.badges[g] = false;
+            } else if (!done && completed < total && s.badges[g]) s.badges[g] = false; // marcar una sesión añadida después no quita la medalla ya ganada
           }
           }));
         }
@@ -750,7 +945,7 @@ export default async (req, context) => {
       }
       if (m && method === "DELETE") {
         const old = await getStudent(m[1]);
-        if (old?.nameKey) await store.delete(old.nameKey);
+        if (/^names\/[0-9a-f]{32}$/.test(old?.nameKey)) await store.delete(old.nameKey); // nunca una clave global
         await store.delete("students/" + m[1]);
         await store.delete("mail/" + m[1]);
         return json({ ok: true });
@@ -770,10 +965,13 @@ export default async (req, context) => {
       if (path === "/teacher/plan" && method === "PUT") {
         const b = await readBody(req);
         if (!/^\d{1,2}-\d{1,2}$/.test(String(b.key))) return fail(400, "Sesión no válida.");
+        const [pg, ps] = String(b.key).split("-").map(Number), pu = (await getCourse()).units[pg];
+        if (!pu || ps >= pu.sessions.length) return fail(400, "Sesión no válida.");
         const pl = isObj(b.plan) ? b.plan : {};
         let full = false;
+        const pc = await getCourse();
         const plans = await update("board/plans", (cur) => {
-          const p = cur || {};
+          const p = syncPlans(cur, pc);
           if (!p[b.key] && Object.keys(p).length >= 300) { full = true; return undefined; }
           p[b.key] = { warmup: clean(pl.warmup, 300), main: clean(pl.main, 300), cooldown: clean(pl.cooldown, 300), material: clean(pl.material, 200) };
           return p;
@@ -807,7 +1005,7 @@ export default async (req, context) => {
       }
       if (path === "/teacher/unit-close" && method === "POST") {
         const b = await readBody(req);
-        if (!intIn(b.g, 0, 19)) return fail(400, "Unidad no válida.");
+        if (!intIn(b.g, 0, MAX_UNITS - 1) || b.g >= (await getCourse()).units.length) return fail(400, "Unidad no válida.");
         const g = b.g, city = clean(b.city, 40);
         const students = await allStudents();
         const squads = FACTIONS.map((f) => {
@@ -817,8 +1015,9 @@ export default async (req, context) => {
         const top = Math.max(0, ...squads.map((q) => q.avg));
         if (top <= 0) return fail(400, "Nadie ha completado sesiones en esta unidad todavía.");
         let rec, exists = false;
-        await update("meta/units", (u) => {
-          const list = u?.list || [];
+        const uc = await getCourse();
+        await update("meta/units", (u0) => {
+          const u = syncUnits(u0, uc), list = u.list || [];
           const old = list.find((x) => x.g === g);
           if (old) { rec = old; exists = true; return undefined; }
           const winners = squads.filter((q) => q.avg === top).map((q) => q.f);
@@ -830,7 +1029,7 @@ export default async (req, context) => {
           if (left.length >= winners.length) for (const f of winners) { const n = pick(left); left.splice(left.indexOf(n), 1); prizes[f] = { kind: "legend", name: n }; }
           else { const extra = { kind: pick(["choose", "day"]) }; for (const f of winners) prizes[f] = { ...extra }; }
           rec = { g, city, at: Date.now(), scores: Object.fromEntries(squads.map((q) => [q.f, Math.round(q.avg * 100) / 100])), winners, prizes, done: false };
-          return { list: [...list, rec].slice(-40) };
+          return { list: [...list, rec].slice(-40), cv: u.cv };
         });
         if (exists && rec.done) return fail(409, "Esta unidad ya está cerrada.");
         // reparte los premios; si se cortó a medias, se reanuda sin repetir a nadie
@@ -838,7 +1037,7 @@ export default async (req, context) => {
           const f = FACTIONS.includes(x.faction) ? x.faction : "Rayo";
           applyUnitPrize(x, rec, rec.winners.includes(f) ? rec.prizes[f] : null);
         })));
-        await update("meta/units", (u) => ({ list: (u?.list || []).map((x) => (x.g === g ? { ...x, done: true } : x)) }));
+        await update("meta/units", (u0) => { const u = syncUnits(u0, uc); return { ...u, list: (u.list || []).map((x) => (x.g === g ? { ...x, done: true } : x)) }; });
         const chest = { g, city: rec.city, winners: rec.winners, prizes: rec.prizes, at: Date.now() };
         await update("board/main", (cur) => ({ ...withBoard(cur), chest }));
         return json({ record: { ...rec, done: true } });
@@ -869,7 +1068,6 @@ export default async (req, context) => {
         if (changed || method === "DELETE") await syncMailNew(mm[1], list, changed);
         return json({ ok: true });
       }
-      if (path === "/teacher/units" && method === "GET") return json(await getUnits());
       if (path === "/teacher/backups" && method === "GET") return json({ backups: await backupList() });
       if (path === "/teacher/backup" && method === "GET") return json(await snapshot());
       if (path === "/teacher/restore" && method === "POST") {
@@ -890,7 +1088,7 @@ export default async (req, context) => {
         const b = await readBody(req);
         const cfg = await update("config/main", (c) => {
           const x = { ...(normCfg(c)) };
-            if (Number.isInteger(b.currentWeek) && b.currentWeek >= 1 && b.currentWeek <= 33) x.currentWeek = b.currentWeek;
+          if (intIn(b.currentWeek, 1, MAX_WEEK)) x.currentWeek = b.currentWeek;
           return x;
         });
         return json({ config: cfg });
@@ -898,6 +1096,252 @@ export default async (req, context) => {
     }
 
     return fail(404, "No encontrado.");
+  } catch (e) {
+    if (e?.status === 413) return fail(413, "Petición demasiado grande.");
+    if (e?.status === 400) return fail(400, "Petición no válida.");
+    console.error(e);
+    if (String(e?.message).startsWith("conflicto")) return fail(503, "Hay mucha actividad, inténtalo otra vez.");
+    return fail(500, "Error del servidor.");
+  }
+}
+
+/* ---------- profes y clases (comunes a todas las clases) ---------- */
+const GRADES = [1, 2, 3, 4, 5, 6];
+const CODE_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const newCode = (n) => Array.from({ length: n }, () => CODE_ABC[crypto.randomInt(CODE_ABC.length)]).join("");
+const emailKey = (e) => "temail/" + sha(e).slice(0, 40);
+const emailOk = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e);
+const getTeacher = (tid) => raw.get("teachers/" + tid, { type: "json" });
+const getClass = (cid) => (cid ? raw.get("classes/" + cid, { type: "json" }) : null);
+const classView = async (c) => ({ id: c.id, grade: c.grade, group: c.group, school: c.school, name: c.name || "", code: c.code, pass: c.pass || "", students: (await raw.list({ prefix: `c/${c.id}/students/` })).blobs.length });
+const classByCode = async (code) => (await raw.get("ccode/" + String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8), { type: "json" }))?.cid || null;
+// contraseña de la clase: la apunta el profe en la pizarra, así que se guarda legible para él (como el código)
+const PASS_RE = /^[A-Z0-9]{6,12}$/; // 6 o más: con 32 símbolos son más de mil millones de combinaciones
+const cleanPass = (p) => String(p ?? "").toUpperCase().replace(/\s+/g, "");
+const passOk = (c, p) => { const a = Buffer.from(cleanPass(p)), b = Buffer.from(c.pass || ""); return !c.pass || (a.length === b.length && crypto.timingSafeEqual(a, b)); };
+const accountView = (t) => ({ name: t.name, email: t.email, tutorialDone: !!t.tutorialDone });
+// escritura atómica de una clave común (sin prefijo de clase)
+async function updateRaw(key, fn) {
+  for (let i = 0; i < 8; i++) {
+    const cur = await raw.getWithMetadata(key, { type: "json" });
+    if (!cur) return null; // solo actualiza: nunca resucita algo borrado
+    const next = await fn(cur.data);
+    if (next === undefined) return null;
+    const r = await raw.setJSON(key, next, { onlyIfMatch: cur.etag });
+    if (r?.modified !== false) return next;
+    await new Promise((ok) => setTimeout(ok, 15 + Math.random() * 40 * (i + 1)));
+  }
+  throw new Error("conflicto de escritura en " + key);
+}
+const classFields = (b) => {
+  const grade = Number(b.grade), group = clean(b.group, 10).toUpperCase(), school = clean(b.school, 60);
+  if (!GRADES.includes(grade)) return "Elige un curso de 1º a 6º.";
+  if (!group) return "Escribe el grupo (por ejemplo A).";
+  if (school.length < 2) return "Escribe el nombre del colegio.";
+  return { grade, group, school };
+};
+async function issueCode(cid) {
+  for (;;) {
+    const code = newCode(6);
+    if ((await raw.setJSON("ccode/" + code, { cid }, { onlyIfNew: true }))?.modified !== false) return code;
+  }
+}
+const teacherToken = async (t) => sign({ role: "teacher", tid: t.id, tv: t.tv || 0, exp: Date.now() + TEACHER_TTL });
+const recoveryCode = () => newCode(4) + "-" + newCode(4) + "-" + newCode(4);
+async function deleteClassData(cid) {
+  const { blobs } = await raw.list({ prefix: `c/${cid}/` });
+  await Promise.all(blobs.map((b) => raw.delete(b.key)));
+}
+
+// rutas de cuenta del profe y de sus clases; devuelve null si la ruta no es de aquí
+async function teacherAccount(req, path, method, ip, session) {
+  if (method === "POST" && path === "/teacher/register") {
+    const b = await readBody(req);
+    if (!(await bump("treg:" + ip, 5, 60 * 60 * 1000, false))) return fail(429, "Demasiadas cuentas nuevas desde esta red. Inténtalo más tarde.");
+    const name = clean(b.name, 60), email = clean(b.email, 254).toLowerCase(), pw = String(b.password ?? "");
+    if (name.length < 2) return fail(400, "Escribe tu nombre.");
+    if (!emailOk(email)) return fail(400, "Escribe un correo válido.");
+    if (pw.length < 8 || pw.length > 200) return fail(400, "La contraseña debe tener al menos 8 caracteres.");
+    const t = { id: "t_" + crypto.randomBytes(8).toString("hex"), name, email, passHash: hashPw(pw), classes: [], tv: 0, createdAt: Date.now() };
+    const recovery = recoveryCode();
+    t.recHash = hashPw(recovery);
+    // mensaje genérico: no confirma qué correos tienen cuenta
+    if ((await raw.setJSON(emailKey(email), { tid: t.id }, { onlyIfNew: true }))?.modified === false) return fail(400, "No se ha podido crear la cuenta con ese correo. Si ya tienes una, entra o usa tu código de recuperación.");
+    // si no se guarda la ficha, se libera el correo para que no quede bloqueado para siempre
+    try { await raw.setJSON("teachers/" + t.id, t); } catch (e) { await raw.delete(emailKey(email)).catch(() => {}); throw e; }
+    return json({ token: await teacherToken(t), teacher: accountView(t), classes: [], recovery }, 201);
+  }
+  if (method === "POST" && path === "/teacher/login") {
+    const b = await readBody(req);
+    const email = clean(b.email, 254).toLowerCase();
+    const a1 = await attempt(`teacher:${ip}`, 20, 5 * 60 * 1000, 2 * 60 * 1000, 2 * 60 * 1000, false);
+    if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
+    // por correo+IP (otro no deja fuera al profe) y uno global por correo mucho más alto contra ataques repartidos
+    const a3 = await attempt(`tmailall:${email}`, 100, 60 * 60 * 1000, 15 * 60 * 1000, 15 * 60 * 1000, false);
+    if (!a3.ok) return fail(429, `Demasiados intentos con esta cuenta. Espera ${a3.mins} min.`);
+    const a2 = await attempt(`tmail:${email}:${ip}`, 10, 5 * 60 * 1000, 5 * 60 * 1000, 5 * 60 * 1000, false);
+    if (!a2.ok) return fail(429, `Demasiados intentos con esta cuenta. Espera ${a2.mins} min.`);
+    const tid = (await raw.get(emailKey(email), { type: "json" }))?.tid;
+    const t = tid ? await getTeacher(tid) : null;
+    if (!t || !checkPw(b.password ?? "", t.passHash)) return fail(401, "Correo o contraseña incorrectos.");
+    await clearAttempts(`tmail:${email}:${ip}`);
+    const classes = (await Promise.all(t.classes.map(getClass))).filter(Boolean);
+    return json({ token: await teacherToken(t), teacher: accountView(t), classes: await Promise.all(classes.map(classView)) });
+  }
+  if (method === "POST" && path === "/teacher/recover") {
+    const b = await readBody(req);
+    const email = clean(b.email, 254).toLowerCase(), pw = String(b.password ?? "");
+    const a1 = await attempt(`trec:${email}`, 5, 15 * 60 * 1000, 15 * 60 * 1000, 15 * 60 * 1000, false);
+    if (!a1.ok) return fail(429, `Demasiados intentos. Espera ${a1.mins} min.`);
+    if (pw.length < 8 || pw.length > 200) return fail(400, "La contraseña nueva debe tener al menos 8 caracteres.");
+    const tid = (await raw.get(emailKey(email), { type: "json" }))?.tid;
+    const t0 = tid ? await getTeacher(tid) : null;
+    const code = clean(b.recovery, 20).toUpperCase();
+    if (!t0 || !checkPw(code, t0.recHash)) return fail(401, "Correo o código de recuperación incorrectos.");
+    // contraseña nueva y código de recuperación nuevo; las sesiones abiertas se cierran
+    const recovery = recoveryCode();
+    const t = await updateRaw("teachers/" + tid, (x) => ({ ...x, passHash: hashPw(pw), recHash: hashPw(recovery), tv: (x.tv || 0) + 1 }));
+    await clearAttempts(`trec:${email}`);
+    return json({ token: await teacherToken(t), teacher: accountView(t), recovery });
+  }
+  if (path !== "/teacher/me" && !path.startsWith("/teacher/classes") && path !== "/teacher/move") return null;
+  if (session?.role !== "teacher") return fail(401, "Sesión caducada. Vuelve a entrar.");
+  const t = session.teacher, tid = t.id;
+  const mine = (cid) => t.classes.includes(cid);
+
+  if (path === "/teacher/me" && method === "GET") {
+    const classes = (await Promise.all(t.classes.map(getClass))).filter(Boolean);
+    return json({ teacher: accountView(t), classes: await Promise.all(classes.map(classView)) });
+  }
+  if (path === "/teacher/me" && method === "PUT") {
+    const b = await readBody(req);
+    const out = await updateRaw("teachers/" + tid, (x) => {
+      if (typeof b.tutorialDone === "boolean") x.tutorialDone = b.tutorialDone;
+      return x;
+    });
+    return json({ teacher: accountView(out) });
+  }
+  if (path === "/teacher/classes" && method === "POST") {
+    const b = await readBody(req);
+    const f = classFields(b);
+    if (typeof f === "string") return fail(400, f);
+    if (t.classes.length >= 30) return fail(400, "Has llegado al máximo de 30 clases.");
+    const id = "c_" + crypto.randomBytes(6).toString("hex");
+    const c = { id, tid, ...f, code: await issueCode(id), pass: newCode(6), createdAt: Date.now() };
+    await raw.setJSON("classes/" + id, c);
+    // el límite se comprueba otra vez con el dato fresco: dos altas a la vez no pasan de 30
+    const added = await updateRaw("teachers/" + tid, (x) => (x.classes.length >= 30 ? undefined : { ...x, classes: [...x.classes, id] }));
+    if (!added) { await raw.delete("ccode/" + c.code); await raw.delete("classes/" + id); return fail(400, "Has llegado al máximo de 30 clases."); }
+    return json({ class: await classView(c) }, 201);
+  }
+  const cm = path.match(/^\/teacher\/classes\/(c_[a-f0-9]{12})(\/code)?$/);
+  if (cm) {
+    const cid = cm[1];
+    if (!mine(cid)) return fail(404, "Clase no encontrada.");
+    const c = await getClass(cid);
+    if (!c) return fail(404, "Clase no encontrada.");
+    if (cm[2] && method === "POST") {
+      // código nuevo: el viejo deja de valer para entrar en la clase
+      const code = await issueCode(cid);
+      let old = null;
+      const n = await updateRaw("classes/" + cid, (x) => { old = x.code; return { ...x, code }; });
+      if (!n) { await raw.delete("ccode/" + code); return fail(404, "Clase no encontrada."); }
+      if (old) await raw.delete("ccode/" + old);
+      return json({ class: await classView(n) });
+    }
+    if (!cm[2] && method === "PUT") {
+      const b = await readBody(req);
+      const f = classFields({ ...c, ...b });
+      if (typeof f === "string") return fail(400, f);
+      if (b.pass !== undefined) { const np = cleanPass(b.pass); if (!PASS_RE.test(np)) return fail(400, "La contraseña de la clase debe tener de 6 a 12 letras o números."); f.pass = np; }
+      const n = await updateRaw("classes/" + cid, (x) => ({ ...x, ...f }));
+      // contraseña nueva: los alumnos que ya estaban dentro tienen que volver a entrar
+      if (n && f.pass && f.pass !== c.pass) await scope.run(cid, () => update("meta/epoch", (e) => (e || 0) + 1));
+      return n ? json({ class: await classView(n) }) : fail(404, "Clase no encontrada.");
+    }
+    if (!cm[2] && method === "DELETE") {
+      await updateRaw("teachers/" + tid, (x) => ({ ...x, classes: x.classes.filter((y) => y !== cid) }));
+      await deleteClassData(cid);
+      await raw.delete("ccode/" + ((await getClass(cid))?.code || c.code));
+      await raw.delete("classes/" + cid);
+      return json({ ok: true });
+    }
+  }
+  // pasar un alumno a otra clase del mismo profe (por ejemplo al cambiar de curso); se lleva todo su progreso y su buzón
+  if (path === "/teacher/move" && method === "POST") {
+    const b = await readBody(req);
+    if (!mine(b.from) || !mine(b.to) || b.from === b.to) return fail(400, "Elige otra clase tuya.");
+    if (!/^[\w-]{1,60}$/.test(String(b.id))) return fail(400, "Alumno no válido.");
+    const src = `c/${b.from}/`, dst = `c/${b.to}/`;
+    let cur = await raw.getWithMetadata(src + "students/" + b.id, { type: "json" });
+    if (!cur) return fail(404, "Alumno no encontrado.");
+    const s0 = cur.data;
+    if ((await raw.setJSON(dst + s0.nameKey, { t: Date.now() }, { onlyIfNew: true }))?.modified === false) return fail(409, "En la otra clase ya hay un alumno con ese nombre. Cámbiale el nombre antes.");
+    try {
+      const c = await getClass(b.to);
+      // cada clase tiene su curso: el progreso se recoloca por id de unidad (la plantilla usa u1..u8 en todas)
+      const ca = await courseOf(b.from), cb = await courseOf(b.to);
+      const fix = (d) => { const x = syncStudent(structuredClone(d), ca); remapProgress(x, idsOf(ca), cb); return x; };
+      // si el alumno cambia algo mientras se copia, se vuelve a copiar
+      for (let i = 0; ; i++) {
+        const mail = await raw.get(src + "mail/" + b.id, { type: "json" });
+        await raw.setJSON(dst + "students/" + b.id, { ...fix(cur.data), school: c?.school || cur.data.school });
+        if (mail) await raw.setJSON(dst + "mail/" + b.id, mail);
+        const again = await raw.getWithMetadata(src + "students/" + b.id, { type: "json" });
+        if (!again || again.etag === cur.etag) break;
+        if (i >= 4) throw new Error("conflicto: el alumno no para de cambiar"); // mejor no mover que perder su último cambio
+        cur = again;
+      }
+    } catch (e) {
+      await raw.delete(dst + "students/" + b.id).catch(() => {});
+      await raw.delete(dst + s0.nameKey).catch(() => {});
+      throw e;
+    }
+    const s = s0;
+    await Promise.all([raw.delete(src + "students/" + b.id), raw.delete(src + "mail/" + b.id), raw.delete(src + s.nameKey)]);
+    return json({ ok: true });
+  }
+  return fail(404, "No encontrado.");
+}
+
+export default async (req, context) => {
+  try {
+    const url = new URL(req.url);
+    const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/";
+    const method = req.method;
+    const ip = context?.ip || req.headers.get("x-nf-client-connection-ip") || "0.0.0.0";
+    const h = req.headers.get("authorization") || "";
+    const tok = await verify(h.startsWith("Bearer ") ? h.slice(7) : "");
+    let session = null;
+    if (tok?.role === "teacher") {
+      const t = await getTeacher(tok.tid);
+      if (t && (t.tv || 0) === tok.tv) session = { ...tok, teacher: t };
+    }
+    const acc = await teacherAccount(req, path, method, ip, session);
+    if (acc) return acc;
+
+    // el resto de rutas son de una clase: la del código (entrar y registrarse), la del token (alumno) o la elegida por el profe
+    let cid;
+    if (path === "/public" || path === "/register" || path === "/login") {
+      // probar códigos al azar sale caro: 30 códigos malos por hora y red
+      cid = await classByCode(url.searchParams.get("clase"));
+      if (!cid && !(await bump("ccbad:" + ip, 30, 60 * 60 * 1000))) return fail(429, "Demasiados códigos incorrectos. Inténtalo más tarde.");
+      if (!cid) return fail(404, "No encuentro esa clase. Revisa el código que te dio tu profe.");
+      // además del código, la contraseña de la clase; 60 fallos en 15 min desde una red la bloquean 15 min en cada clase
+      // el bloqueo se mira ANTES de comprobar: si no, el 429 delataría cuál es la buena
+      const c0 = await getClass(cid), pk = `cpbad:${cid}:${ip}`;
+      if (c0?.pass) {
+        if (((await store.get(rlKey(pk), { type: "json" }))?.until || 0) > Date.now()) return fail(429, "Demasiadas contraseñas incorrectas. Inténtalo más tarde.");
+        if (!passOk(c0, req.headers.get("x-clase-pass"))) { await bump(pk, 60, 15 * 60 * 1000); return fail(403, "Contraseña de la clase incorrecta. Pídesela a tu profe."); }
+      }
+    } else if (tok?.role === "student") {
+      cid = tok.cid;
+    } else if (session) {
+      cid = req.headers.get("x-class");
+      if (!session.teacher.classes.includes(cid)) return fail(400, "Elige una de tus clases.");
+    } else return fail(401, "Sesión caducada. Vuelve a entrar.");
+    if (!(await getClass(cid))) return fail(404, "Esta clase ya no existe.");
+    return await scope.run(cid, () => classHandler(req, context));
   } catch (e) {
     if (e?.status === 413) return fail(413, "Petición demasiado grande.");
     if (e?.status === 400) return fail(400, "Petición no válida.");

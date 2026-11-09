@@ -1,3 +1,36 @@
+# Liga del Movimiento - VERSIÓN GLOBAL (cualquier profe, cualquier curso)
+
+Esta rama (`version-global`) es una copia aparte de la web de 4º: **no se fusiona en `main`** y se publica como otro sitio de Netlify. Cualquier profe se crea una cuenta con su correo, crea una o varias clases (de 1º a 6º) y cada clase va por separado: alumnos, pizarra, asistencia, unidades, buzón y copias de seguridad. Los alumnos entran con el **código de su clase** (6 letras que ve el profe en *Gestión → Mi clase*) y luego con sus 3 emojis.
+
+## Cómo publicarla
+
+1. **Base de datos (Supabase, gratis)**: crea un proyecto en supabase.com, abre *SQL Editor*, pega `supabase/kv.sql` y ejecútalo.
+2. **Netlify**: *Add new site → Import an existing project* → este repositorio, rama **`version-global`**.
+3. **Variables de entorno** (*Site configuration → Environment variables*):
+
+| Variable | Para qué | ¿Obligatoria? |
+|---|---|---|
+| `SUPABASE_URL` | Dirección del proyecto (*Project Settings → API*). | **Sí** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clave *service_role* del mismo sitio. Es secreta: solo va en Netlify, nunca en la web. | **Sí** |
+| `SESSION_SECRET` | Clave para firmar sesiones. Si no la pones, se genera sola. | No |
+
+Ya no hacen falta `TEACHER_PASSWORD` ni `CLASS_CODE`. Sin las variables de Supabase, la web usa Netlify Blobs (sirve para probar).
+
+> En el plan gratis, Supabase **pausa el proyecto si pasa una semana sin uso** (por ejemplo en vacaciones). Se reactiva con un clic en su panel; los datos no se pierden.
+
+## Pasar los datos de 4º a la versión global
+1. En la web actual: *Gestión → Copias de seguridad → Descargar copia*.
+2. En la global: crea tu cuenta y la clase (4º A), abre *Gestión → Copias de seguridad → Restaurar desde archivo* y elige ese archivo.
+
+## Cuentas de profe
+- Al crear la cuenta se muestra un **código de recuperación**: es la única forma de recuperar la contraseña (no se envían correos). Al usarlo se genera uno nuevo y se cierran las sesiones abiertas.
+- Cada profe solo ve sus clases. Puede pasar un alumno de una clase suya a otra (*Gestión → Mi clase*), con todo su progreso, por ejemplo al cambiar de curso.
+
+## Pruebas
+`node tests/global.test.mjs` prueba el servidor con un almacén en memoria.
+
+---
+
 # Liga del Movimiento - Kanto (versión Netlify, 4º de primaria)
 
 ## Cómo publicarla
