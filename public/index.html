@@ -1458,7 +1458,7 @@
                                         <input id="km-ec-cole" type="text" maxlength="60" autocomplete="organization" x-model="classEdit.school" class="w-full min-h-[48px] px-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600"></div>
                                     <div><label for="km-ec-pass" class="block text-slate-300 font-bold mb-1">Contraseña de la clase:</label>
                                         <input id="km-ec-pass" type="text" maxlength="12" autocomplete="off" x-model="classEdit.pass" aria-describedby="km-ec-pass-ayuda" class="w-full min-h-[48px] px-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600 uppercase">
-                                        <p id="km-ec-pass-ayuda" class="text-xs text-slate-400 mt-1">De 4 a 12 letras o números.</p></div>
+                                        <p id="km-ec-pass-ayuda" class="text-xs text-slate-400 mt-1">De 6 a 12 letras o números.</p></div>
                                 </div>
                                 <button type="submit" @click.prevent="saveClass()" :disabled="classBusy" class="min-h-[48px] px-4 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 disabled:opacity-40">💾 Guardar datos</button>
                                 <p class="text-sm text-emerald-300" role="status" x-text="classMsg"></p>
@@ -3528,7 +3528,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.detail = null; this.selectedGymModal = null; this.activeStudentTarget = null; this.showFamilyReportModal = false;
                     this.showPlanEditor = false; this.showCards = false; this.cards = [];
                     this.dirSearch = ''; this.dirFilter = 'all'; this.aulaFilter = 'all'; this.currentWeek = 1; this._courseKey = null;
-                    this.moveSel = { id: '', to: '' }; this.classMsg = '';
+                    this.moveSel = { id: '', to: '' }; this.classMsg = ''; this.classFormMsg = ''; this.classFormOk = '';
                 },
                 async chooseClass(id) {
                     this.clearClassData();
@@ -4740,7 +4740,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.showChooseModal = false; this.showFamilyReportModal = false; this.detail = null;
                     this.evalExit = false; this.evalDraft = {}; this.evalStatus = ''; this.evalSavedOk = false;
                     this.showCompanionModal = false; this.companionEvo = null; this.companionPick = null;
-                    if (this.currentRole === 'teacher') { this.clearClassData(); this.teacher = null; this.teacherClasses = []; this.teacherClassId = null; this.tutOpen = false; }
+                    if (this.currentRole === 'teacher') { this.clearClassData(); this.teacher = null; this.teacherClasses = []; this.teacherClassId = null; this.tutOpen = false; this.classEdit = { grade: 4, group: '', school: '', pass: '' }; this.teacherForm = { name: '', email: '', recovery: '', password: '' }; this.teacherErrorMsg = ''; }
                     this.token = null;
                     this.currentRole = null;
                     this.currentStudentId = null;

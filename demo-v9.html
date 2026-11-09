@@ -80,7 +80,7 @@ D.forEach(s=>s.school='CEIP Kanto');
 const CLA={c_0000000004a0:db,
  c_0000000006b0:newDb([kid('Hugo Sánchez','boy','Rayo','CEIP Kanto',4,3),kid('Valeria Gil','girl','Cascada','CEIP Kanto',2,2),kid('Iker Romero','boy','Roca','CEIP Kanto',5,4),kid('Noa Herrera','girl','Rayo','CEIP Kanto',1,1),kid('Leo Castro','boy','Cascada','CEIP Kanto',3,2),kid('Alba Molina','girl','Roca','CEIP Kanto',0,0)]),
  c_0000000002a0:newDb([kid('Mateo Ortiz','boy','Rayo','CEIP Johto',1,1),kid('Sofía Vega','girl','Cascada','CEIP Johto',2,2),kid('Lucas Ramos','boy','Roca','CEIP Johto',0,0),kid('Emma Navarro','girl','Rayo','CEIP Johto',1,1),kid('Daniel Prieto','boy','Cascada','CEIP Johto',2,1)])};
-const CLS={c_0000000004a0:{id:'c_0000000004a0',grade:4,group:'A',school:'CEIP Kanto',code:'KANTO4',pass:'PIKA'},c_0000000006b0:{id:'c_0000000006b0',grade:6,group:'B',school:'CEIP Kanto',code:'KANTO6',pass:'CHARM'},c_0000000002a0:{id:'c_0000000002a0',grade:2,group:'A',school:'CEIP Johto',code:'JOHTO2',pass:'TOGE'}};
+const CLS={c_0000000004a0:{id:'c_0000000004a0',grade:4,group:'A',school:'CEIP Kanto',code:'KANTO4',pass:'PIKACHU'},c_0000000006b0:{id:'c_0000000006b0',grade:6,group:'B',school:'CEIP Kanto',code:'KANTO6',pass:'CHARMANDER'},c_0000000002a0:{id:'c_0000000002a0',grade:2,group:'A',school:'CEIP Johto',code:'JOHTO2',pass:'TOGEPI'}};
 const CODES={KANTO4:'c_0000000004a0',KANTO6:'c_0000000006b0',JOHTO2:'c_0000000002a0'};let CC=CLS.c_0000000004a0;
 const TS=[{id:'t_demo',name:'Profe Demo',email:'demo@liga.es',pw:'demo1234',rec:'DEMO-DEMO-DEMO',classes:['c_0000000004a0'],tutorialDone:false,tv:0},
  {id:'t_ana',name:'Ana Ruiz',email:'ana@liga.es',pw:'demo1234',rec:'ANAR-UIZA-NARU',classes:['c_0000000006b0'],tutorialDone:true,tv:0},
@@ -97,7 +97,7 @@ const nk=n=>String(n).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCas
 const newCode=cid=>{let c;do c=rnd(6);while(CODES[c]);CODES[c]=cid;return c;};
 function account(p,m,b,t){
  const email=String(b.email||'').trim().toLowerCase(),pw=String(b.password||'');
- if(m==='POST'&&p==='/teacher/register'){const name=String(b.name||'').trim().slice(0,60);if(name.length<2)return E('Escribe tu nombre.',400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))return E('Escribe un correo válido.',400);if(pw.length<8)return E('La contraseña debe tener al menos 8 caracteres.',400);
+ if(m==='POST'&&p==='/teacher/register'){const name=String(b.name||'').trim().slice(0,60);if(name.length<2)return E('Escribe tu nombre.',400);if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))return E('Escribe un correo válido.',400);if(pw.length<8||pw.length>200)return E('La contraseña debe tener al menos 8 caracteres.',400);
   if(TS.some(x=>x.email===email))return E('No se ha podido crear la cuenta con ese correo. Si ya tienes una, entra o usa tu código de recuperación.',400);const n={id:'t_'+rnd(8).toLowerCase(),name,email,pw,rec:recov(),classes:[],tutorialDone:false,tv:0};TS.push(n);return R({token:ttok(n),teacher:tview(n),classes:[],recovery:n.rec},201);}
  if(m==='POST'&&p==='/teacher/login'){const n=TS.find(x=>x.email===email);if(!n||n.pw!==pw)return E('Correo o contraseña incorrectos. En la demo: demo@liga.es, ana@liga.es o maria@liga.es, contraseña demo1234.',401);return R({token:ttok(n),teacher:tview(n),classes:n.classes.map(c=>cview(CLS[c]))});}
  if(m==='POST'&&p==='/teacher/recover'){if(pw.length<8)return E('La contraseña nueva debe tener al menos 8 caracteres.',400);const n=TS.find(x=>x.email===email);if(!n||n.rec!==String(b.recovery||'').trim().toUpperCase())return E('Correo o código de recuperación incorrectos.',401);n.pw=pw;n.rec=recov();n.tv++;return R({token:ttok(n),teacher:tview(n),recovery:n.rec});}
@@ -106,11 +106,11 @@ function account(p,m,b,t){
  if(p==='/teacher/me'&&m==='GET')return R({teacher:tview(t),classes:t.classes.map(c=>cview(CLS[c]))});
  if(p==='/teacher/me'&&m==='PUT'){if(typeof b.tutorialDone==='boolean')t.tutorialDone=b.tutorialDone;return R({teacher:tview(t)});}
  if(p==='/teacher/classes'&&m==='POST'){const f=cfields(b);if(typeof f==='string')return E(f,400);if(t.classes.length>=30)return E('Has llegado al máximo de 30 clases.',400);const id='c_'+Date.now().toString(16).padStart(12,'0').slice(-12);
-  CLS[id]={id,...f,code:newCode(id),pass:rnd(5)};CLA[id]=newDb([]);t.classes.push(id);return R({class:cview(CLS[id])},201);}
+  CLS[id]={id,...f,code:newCode(id),pass:rnd(6)};CLA[id]=newDb([]);t.classes.push(id);return R({class:cview(CLS[id])},201);}
  const cm=p.match(/^\/teacher\/classes\/(c_[a-f0-9]{12})(\/code)?$/);
  if(cm){const id=cm[1],c=CLS[id];if(!c||!t.classes.includes(id))return E('Clase no encontrada.',404);
   if(cm[2]&&m==='POST'){delete CODES[c.code];c.code=newCode(id);return R({class:cview(c)});}
-  if(!cm[2]&&m==='PUT'){const f=cfields({...c,...b});if(typeof f==='string')return E(f,400);if(b.pass!==undefined){const np=String(b.pass).toUpperCase().replace(/\s+/g,'');if(!/^[A-Z0-9]{4,12}$/.test(np))return E('La contraseña de la clase debe tener de 4 a 12 letras o números.',400);f.pass=np;}Object.assign(c,f);return R({class:cview(c)});}
+  if(!cm[2]&&m==='PUT'){const f=cfields({...c,...b});if(typeof f==='string')return E(f,400);if(b.pass!==undefined){const np=String(b.pass).toUpperCase().replace(/\s+/g,'');if(!/^[A-Z0-9]{6,12}$/.test(np))return E('La contraseña de la clase debe tener de 6 a 12 letras o números.',400);f.pass=np;}Object.assign(c,f);return R({class:cview(c)});}
   if(!cm[2]&&m==='DELETE'){t.classes=t.classes.filter(x=>x!==id);delete CODES[c.code];delete CLS[id];delete CLA[id];return R({ok:true});}}
  if(p==='/teacher/move'&&m==='POST'){if(!t.classes.includes(b.from)||!t.classes.includes(b.to)||b.from===b.to)return E('Elige otra clase tuya.',400);const A=CLA[b.from],B=CLA[b.to],s=A.s.find(x=>x.id===b.id);if(!s)return E('Alumno no encontrado.',404);
   if(B.s.some(x=>nk(x.name)===nk(s.name)))return E('En la otra clase ya hay un alumno con ese nombre. Cámbiale el nombre antes.',409);
@@ -119,7 +119,7 @@ function account(p,m,b,t){
 }
 const real=window.fetch.bind(window);
 // la demo se guarda en este navegador; si el sandbox no deja usar localStorage, sigue en memoria
-const KEY='km-demo-global-v5';
+const KEY='km-demo-global-v6';
 const INIT=JSON.stringify({CLA,CLS,CODES,TS});
 const load=z=>{if(z&&z.CLA&&z.CLS&&z.CODES&&Array.isArray(z.TS)){for(const o of [CLA,CLS,CODES])for(const k in o)delete o[k];Object.assign(CLA,z.CLA);Object.assign(CLS,z.CLS);Object.assign(CODES,z.CODES);TS.splice(0,TS.length,...z.TS);db=CLA.c_0000000004a0||Object.values(CLA)[0]||newDb([]);}};
 try{load(JSON.parse(localStorage.getItem(KEY)||'null'));}catch(e){}
@@ -141,9 +141,9 @@ const api=async(url,o={})=>{
  else return E('Sesión caducada. Vuelve a entrar.',401);
  db=CLA[cid];CC=CLS[cid];if(!db)return E('Esta clase ya no existe.',404);
  if(m==='GET'&&p==='/public')return R({students:db.s.map(s=>({id:s.id,name:short(s.name),school:s.school,gender:s.gender,faction:s.faction,badges:s.badges})),config:db.cfg,course:crs(),factionTotals:tot(),class:{grade:CC.grade,group:CC.group,school:CC.school,name:CC.name||''}});
- if(m==='POST'&&p==='/login'){const s=get(b.id);if(!s)return E('Código incorrecto. ¡Inténtalo otra vez!',401);return R({token:stok(s.id),profile:sv(s)});}
+ if(m==='POST'&&p==='/login'){const s=get(b.id);if(!s||((db.pw||{})[s.id]&&db.pw[s.id]!==b.password))return E('Código incorrecto. ¡Inténtalo otra vez!',401);return R({token:stok(s.id),profile:sv(s)});}
  if(m==='POST'&&p==='/register'){const n=String(b.name||'').trim().slice(0,30);if(n.length<2)return E('Escribe tu nombre (mínimo 2 letras).',400);if(db.s.some(x=>nk(x.name)===nk(n)))return E('Ya existe un alumno con ese nombre. Añade tu inicial o apellido.',409);
-  const s=mkS(n,b.gender,b.faction,CC.school);s.cv=String(crs().rev);db.s.push(s);return R({token:stok(s.id),profile:sv(s)},201);}
+  const s=mkS(n,b.gender,b.faction,CC.school);s.cv=String(crs().rev);db.s.push(s);(db.pw||(db.pw={}))[s.id]=String(b.password||'');return R({token:stok(s.id),profile:sv(s)},201);}
  if(m==='GET'&&p==='/teacher/backups')return R({backups:Object.keys(bk()).sort()});
  if(m==='GET'&&p==='/teacher/backup')return R(snap());
  if(m==='POST'&&p==='/teacher/restore'){let sn=b.snapshot;if(typeof b.name==='string'){if(!bk()[b.name])return E('No encuentro esa copia.',404);sn=cl(bk()[b.name]);}
@@ -180,10 +180,10 @@ const api=async(url,o={})=>{
  if(m==='PUT'&&p==='/teacher/plan'){db.plans[b.key]=b.plan;return R({plans:db.plans});}
  if(m==='PUT'&&p==='/teacher/config'){if(Number.isInteger(b.currentWeek)&&b.currentWeek>=1&&b.currentWeek<=400)db.cfg.currentWeek=b.currentWeek;return R({config:db.cfg});}
  if(x=p.match(/^\/teacher\/students\/([\w-]+)(?:\/(session|reward|bonus))?$/)){const s=get(x[1]);if(!s)return E('No encontrado',404);
-  if(m==='DELETE'){db.s=db.s.filter(q=>q!==s);return R({ok:true});}
+  if(m==='DELETE'){db.s=db.s.filter(q=>q!==s);if(db.mail)delete db.mail[s.id];if(db.pw)delete db.pw[s.id];return R({ok:true});}
   if(m==='PUT'){const cu=crs().units;if('badges' in b||'gymSessionsData' in b){if(String(b.rev??'')!==String(crs().rev))return E('El curso de la clase ha cambiado. Vuelve a cargar la página.',409);
    if(('badges' in b&&!(Array.isArray(b.badges)&&b.badges.length===cu.length&&b.badges.every(q=>typeof q==='boolean')))||('gymSessionsData' in b&&!(Array.isArray(b.gymSessionsData)&&b.gymSessionsData.length===cu.length&&b.gymSessionsData.every((r,g)=>Array.isArray(r)&&r.length===cu[g].sessions.length&&r.every(q=>typeof q==='boolean')))))return E('Las medallas o las sesiones no encajan con el curso.',400);}
-   ['name','school','gender','faction','tokens','badges','gymSessionsData','pendingNotifications','weight','height','wingspan','hrRest','note'].forEach(k=>{if(k in b)s[k]=b[k];});return R({profile:cl(s)});}
+   if(typeof b.name==='string'&&b.name.trim().length<2)delete b.name;if(typeof b.newPassword==='string'&&b.newPassword)(db.pw||(db.pw={}))[s.id]=b.newPassword;['name','school','gender','faction','tokens','badges','gymSessionsData','pendingNotifications','weight','height','wingspan','hrRest','note'].forEach(k=>{if(k in b)s[k]=b[k];});return R({profile:cl(s)});}
   if(x[2]==='bonus'){const dl=b.delta===-1?-1:1;s.tokens=Math.max(0,s.tokens+dl);if(dl===1)note(s,{title:'¡Fair play!',desc:'+1 ficha por tu buen comportamiento.',icon:'🤝'});return R({profile:cl(s)});}
   if(x[2]==='session'){const cu=crs().units;if(!Number.isInteger(b.gIndex)||!cu[b.gIndex]||!Number.isInteger(b.sIndex)||b.sIndex<0||b.sIndex>=b.gymTotal)return E('Sesión no válida.',400);if(String(b.rev??'0')!==String(crs().rev)||b.gymCount!==cu.length||b.gymTotal!==cu[b.gIndex].sessions.length)return E('El curso de la clase ha cambiado. Vuelve a cargar la página.',409);
    const g=b.gIndex,i=b.sIndex,row=s.gymSessionsData[g]=(s.gymSessionsData[g]||[]);while(row.length<b.gymTotal)row.push(false);const done=!!b.done;
@@ -1664,7 +1664,7 @@ window.addEventListener('error',e=>{const i=e.target;if(i&&i.tagName==='IMG'&&i.
                                         <input id="km-ec-cole" type="text" maxlength="60" autocomplete="organization" x-model="classEdit.school" class="w-full min-h-[48px] px-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600"></div>
                                     <div><label for="km-ec-pass" class="block text-slate-300 font-bold mb-1">Contraseña de la clase:</label>
                                         <input id="km-ec-pass" type="text" maxlength="12" autocomplete="off" x-model="classEdit.pass" aria-describedby="km-ec-pass-ayuda" class="w-full min-h-[48px] px-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600 uppercase">
-                                        <p id="km-ec-pass-ayuda" class="text-xs text-slate-400 mt-1">De 4 a 12 letras o números.</p></div>
+                                        <p id="km-ec-pass-ayuda" class="text-xs text-slate-400 mt-1">De 6 a 12 letras o números.</p></div>
                                 </div>
                                 <button type="submit" @click.prevent="saveClass()" :disabled="classBusy" class="min-h-[48px] px-4 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 disabled:opacity-40">💾 Guardar datos</button>
                                 <p class="text-sm text-emerald-300" role="status" x-text="classMsg"></p>
@@ -3734,7 +3734,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.detail = null; this.selectedGymModal = null; this.activeStudentTarget = null; this.showFamilyReportModal = false;
                     this.showPlanEditor = false; this.showCards = false; this.cards = [];
                     this.dirSearch = ''; this.dirFilter = 'all'; this.aulaFilter = 'all'; this.currentWeek = 1; this._courseKey = null;
-                    this.moveSel = { id: '', to: '' }; this.classMsg = '';
+                    this.moveSel = { id: '', to: '' }; this.classMsg = ''; this.classFormMsg = ''; this.classFormOk = '';
                 },
                 async chooseClass(id) {
                     this.clearClassData();
@@ -4946,7 +4946,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.showChooseModal = false; this.showFamilyReportModal = false; this.detail = null;
                     this.evalExit = false; this.evalDraft = {}; this.evalStatus = ''; this.evalSavedOk = false;
                     this.showCompanionModal = false; this.companionEvo = null; this.companionPick = null;
-                    if (this.currentRole === 'teacher') { this.clearClassData(); this.teacher = null; this.teacherClasses = []; this.teacherClassId = null; this.tutOpen = false; }
+                    if (this.currentRole === 'teacher') { this.clearClassData(); this.teacher = null; this.teacherClasses = []; this.teacherClassId = null; this.tutOpen = false; this.classEdit = { grade: 4, group: '', school: '', pass: '' }; this.teacherForm = { name: '', email: '', recovery: '', password: '' }; this.teacherErrorMsg = ''; }
                     this.token = null;
                     this.currentRole = null;
                     this.currentStudentId = null;
@@ -5093,5 +5093,5 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
         </div>
     </template>
 </div>
-<style>.km-demo-badge{max-width:calc(100vw - 16px);white-space:normal}@media (max-width:640px){.fixed.inset-0.overflow-y-auto:has(.pixel-title){padding-bottom:170px}}body:has(.km-tabbar,.km-profe-tabs,#km-clases-t) .km-demo-badge{font-size:0!important;padding:3px 8px!important}body:has(.km-tabbar,.km-profe-tabs,#km-clases-t) .km-demo-badge::before{content:"DEMO";font-size:11px}body:has(.km-tabbar,.km-profe-tabs,#km-clases-t) .km-demo-reset{display:none}</style><div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:6px 10px;border-radius:14px;opacity:.95">DEMO GLOBAL · clases (código / contraseña): <b>KANTO4 / PIKA</b> (profe demo@liga.es) · <b>KANTO6 / CHARM</b> (ana@liga.es) · <b>JOHTO2 / TOGE</b> (maria@liga.es) · contraseña de profes: demo1234 · alumnos: 3 emojis cualquiera <button type="button" class="km-demo-reset" onclick="kmDemoReset()">Reiniciar demo</button></div>
+<style>.km-demo-badge{max-width:calc(100vw - 16px);white-space:normal}@media (max-width:640px){.fixed.inset-0.overflow-y-auto:has(.pixel-title){padding-bottom:170px}}body:has(.km-tabbar,.km-profe-tabs,#km-clases-t) .km-demo-badge{font-size:0!important;padding:3px 8px!important}body:has(.km-tabbar,.km-profe-tabs,#km-clases-t) .km-demo-badge::before{content:"DEMO";font-size:11px}body:has(.km-tabbar,.km-profe-tabs,#km-clases-t) .km-demo-reset{display:none}</style><div class="km-demo-badge" style="position:fixed;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:9999;pointer-events:none;background:#f59e0b;color:#1c1917;font:700 12px Nunito,sans-serif;padding:6px 10px;border-radius:14px;opacity:.95">DEMO GLOBAL · clases (código / contraseña): <b>KANTO4 / PIKACHU</b> (profe demo@liga.es) · <b>KANTO6 / CHARMANDER</b> (ana@liga.es) · <b>JOHTO2 / TOGEPI</b> (maria@liga.es) · contraseña de profes: demo1234 · alumnos: 3 emojis cualquiera <button type="button" class="km-demo-reset" onclick="kmDemoReset()">Reiniciar demo</button></div>
 </body></html>

@@ -599,6 +599,7 @@ async function classHandler(req, context) {
       const nameKey = nameKeyOf(name);
       const dupMsg = "Ya existe un alumno con ese nombre. Añade tu inicial o apellido.";
       const existing = await allStudents();
+      if (existing.length >= 60) return fail(400, "Esta clase ya tiene 60 alumnos. Habla con tu profe.");
       if (existing.some((s) => s.name.toLowerCase() === name.toLowerCase())) return fail(409, dupMsg);
       // la reserva del nombre es atómica: dos registros a la vez no pasan los dos
       const res = await store.setJSON(nameKey, { t: Date.now() }, { onlyIfNew: true });
@@ -1067,7 +1068,6 @@ async function classHandler(req, context) {
         if (changed || method === "DELETE") await syncMailNew(mm[1], list, changed);
         return json({ ok: true });
       }
-      if (path === "/teacher/units" && method === "GET") return json(await getUnits());
       if (path === "/teacher/backups" && method === "GET") return json({ backups: await backupList() });
       if (path === "/teacher/backup" && method === "GET") return json(await snapshot());
       if (path === "/teacher/restore" && method === "POST") {
@@ -1116,7 +1116,7 @@ const getClass = (cid) => (cid ? raw.get("classes/" + cid, { type: "json" }) : n
 const classView = async (c) => ({ id: c.id, grade: c.grade, group: c.group, school: c.school, name: c.name || "", code: c.code, pass: c.pass || "", students: (await raw.list({ prefix: `c/${c.id}/students/` })).blobs.length });
 const classByCode = async (code) => (await raw.get("ccode/" + String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8), { type: "json" }))?.cid || null;
 // contraseña de la clase: la apunta el profe en la pizarra, así que se guarda legible para él (como el código)
-const PASS_RE = /^[A-Z0-9]{4,12}$/;
+const PASS_RE = /^[A-Z0-9]{6,12}$/; // 6 o más: con 32 símbolos son más de mil millones de combinaciones
 const cleanPass = (p) => String(p ?? "").toUpperCase().replace(/\s+/g, "");
 const passOk = (c, p) => { const a = Buffer.from(cleanPass(p)), b = Buffer.from(c.pass || ""); return !c.pass || (a.length === b.length && crypto.timingSafeEqual(a, b)); };
 const accountView = (t) => ({ name: t.name, email: t.email, tutorialDone: !!t.tutorialDone });
@@ -1217,7 +1217,6 @@ async function teacherAccount(req, path, method, ip, session) {
     const b = await readBody(req);
     const out = await updateRaw("teachers/" + tid, (x) => {
       if (typeof b.tutorialDone === "boolean") x.tutorialDone = b.tutorialDone;
-      if ("name" in b && clean(b.name, 60).length >= 2) x.name = clean(b.name, 60);
       return x;
     });
     return json({ teacher: accountView(out) });
@@ -1228,7 +1227,7 @@ async function teacherAccount(req, path, method, ip, session) {
     if (typeof f === "string") return fail(400, f);
     if (t.classes.length >= 30) return fail(400, "Has llegado al máximo de 30 clases.");
     const id = "c_" + crypto.randomBytes(6).toString("hex");
-    const c = { id, tid, ...f, code: await issueCode(id), pass: newCode(5), createdAt: Date.now() };
+    const c = { id, tid, ...f, code: await issueCode(id), pass: newCode(6), createdAt: Date.now() };
     await raw.setJSON("classes/" + id, c);
     // el límite se comprueba otra vez con el dato fresco: dos altas a la vez no pasan de 30
     const added = await updateRaw("teachers/" + tid, (x) => (x.classes.length >= 30 ? undefined : { ...x, classes: [...x.classes, id] }));
@@ -1254,8 +1253,10 @@ async function teacherAccount(req, path, method, ip, session) {
       const b = await readBody(req);
       const f = classFields({ ...c, ...b });
       if (typeof f === "string") return fail(400, f);
-      if (b.pass !== undefined) { const np = cleanPass(b.pass); if (!PASS_RE.test(np)) return fail(400, "La contraseña de la clase debe tener de 4 a 12 letras o números."); f.pass = np; }
+      if (b.pass !== undefined) { const np = cleanPass(b.pass); if (!PASS_RE.test(np)) return fail(400, "La contraseña de la clase debe tener de 6 a 12 letras o números."); f.pass = np; }
       const n = await updateRaw("classes/" + cid, (x) => ({ ...x, ...f }));
+      // contraseña nueva: los alumnos que ya estaban dentro tienen que volver a entrar
+      if (n && f.pass && f.pass !== c.pass) await scope.run(cid, () => update("meta/epoch", (e) => (e || 0) + 1));
       return n ? json({ class: await classView(n) }) : fail(404, "Clase no encontrada.");
     }
     if (!cm[2] && method === "DELETE") {
@@ -1325,12 +1326,12 @@ export default async (req, context) => {
       cid = await classByCode(url.searchParams.get("clase"));
       if (!cid && !(await bump("ccbad:" + ip, 30, 60 * 60 * 1000))) return fail(429, "Demasiados códigos incorrectos. Inténtalo más tarde.");
       if (!cid) return fail(404, "No encuentro esa clase. Revisa el código que te dio tu profe.");
-      // además del código, la contraseña de la clase; 60 fallos por hora y red en cada clase
+      // además del código, la contraseña de la clase; 60 fallos en 15 min desde una red la bloquean 15 min en cada clase
       // el bloqueo se mira ANTES de comprobar: si no, el 429 delataría cuál es la buena
       const c0 = await getClass(cid), pk = `cpbad:${cid}:${ip}`;
       if (c0?.pass) {
         if (((await store.get(rlKey(pk), { type: "json" }))?.until || 0) > Date.now()) return fail(429, "Demasiadas contraseñas incorrectas. Inténtalo más tarde.");
-        if (!passOk(c0, req.headers.get("x-clase-pass"))) { await bump(pk, 60, 60 * 60 * 1000); return fail(403, "Contraseña de la clase incorrecta. Pídesela a tu profe."); }
+        if (!passOk(c0, req.headers.get("x-clase-pass"))) { await bump(pk, 60, 15 * 60 * 1000); return fail(403, "Contraseña de la clase incorrecta. Pídesela a tu profe."); }
       }
     } else if (tok?.role === "student") {
       cid = tok.cid;

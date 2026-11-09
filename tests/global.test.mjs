@@ -23,7 +23,7 @@ assert.equal((await call("/teacher/classes", "POST", { grade: 7, group: "A", sch
 const c4 = (await call("/teacher/classes", "POST", { grade: 4, group: "a", school: "CEIP Kanto" }, A)).j.class;
 const c5 = (await call("/teacher/classes", "POST", { grade: 5, group: "B", school: "CEIP Kanto" }, A)).j.class;
 const c1 = (await call("/teacher/classes", "POST", { grade: 1, group: "A", school: "Otro cole" }, B)).j.class;
-assert.equal(c4.group, "A"); assert.match(c4.code, /^[A-Z0-9]{6}$/); assert.match(c4.pass, /^[A-Z0-9]{5}$/);
+assert.equal(c4.group, "A"); assert.match(c4.code, /^[A-Z0-9]{6}$/); assert.match(c4.pass, /^[A-Z0-9]{6}$/);
 for (const c of [c4, c5, c1]) PASS[c.code] = c.pass;
 // sin la contraseña de la clase no se ve nada; mayúsculas o minúsculas da igual
 assert.equal((await call("/public?clase=" + c4.code, "GET", undefined, null, null, "1.1.1.1", "")).s, 403);
@@ -37,6 +37,7 @@ assert.equal((await call("/public?clase=" + c1.code, "GET", undefined, null, nul
 // el profe cambia la contraseña: la vieja deja de valer
 assert.equal((await call("/teacher/classes/" + c5.id, "PUT", { pass: "ab" }, A)).s, 400);
 const c5p = (await call("/teacher/classes/" + c5.id, "PUT", { pass: "pika 55" }, A)).j.class; assert.equal(c5p.pass, "PIKA55");
+assert.equal((await call("/teacher/classes/" + c5.id, "PUT", { pass: "abcde" }, A)).s, 400);
 assert.equal((await call("/public?clase=" + c5.code)).s, 403); PASS[c5.code] = "PIKA55";
 assert.equal((await call("/public?clase=" + c5.code)).s, 200);
 // los alumnos entran con el código de su clase
@@ -151,7 +152,7 @@ assert.ok(lu.gymSessionsData[1].every(Boolean)); assert.ok(!lu.gymSessionsData[2
 assert.deepEqual(lu.badges, [false, true, false]); assert.deepEqual(Object.keys(lu.unitsDone), ["1"]); assert.equal(lu.cv, REV);
 let pl = (await call("/teacher/board", "GET", null, A2, c5.id)).j.plans;
 assert.equal(pl["0-3"].warmup, "pasa a 0-3"); assert.ok(!pl["2-15"] && !pl["1-0"] && !pl["0-15"]);
-assert.deepEqual((await call("/teacher/units", "GET", null, A2, c5.id)).j.list.map((x) => x.g), [1]);
+assert.deepEqual((await call("/teacher/students", "GET", null, A2, c5.id)).j.units.map((x) => x.g), [1]);
 assert.equal((await call("/public?clase=" + c5.code)).j.class.name, "Los Pikachus");
 assert.equal((await call("/teacher/me", "GET", null, A2)).j.classes.find((c) => c.id === c5.id).name, "Los Pikachus");
 // límites nuevos: hasta 30 sesiones; con el curso viejo en pantalla se pide recargar
@@ -225,4 +226,12 @@ assert.equal((await call("/teacher/me", "GET", null, A2)).j.classes.length, 30);
 const nc = [...mem.keys()].filter((k) => k.startsWith("classes/")).length;
 assert.equal((await call("/teacher/classes", "POST", { grade: 1, group: "Z", school: "Cole" }, A2)).s, 400);
 assert.equal([...mem.keys()].filter((k) => k.startsWith("classes/")).length, nc);
+// cambiar la contraseña de la clase saca a los alumnos que estaban dentro; una clase admite 60 alumnos
+const cr = (await call("/teacher/me", "GET", null, B)).j.classes[0]; PASS[cr.code] = cr.pass;
+const tk = (await reg(cr.code, "Rita Rojas")).j.token;
+assert.equal((await call("/me", "GET", null, tk)).s, 200);
+await call("/teacher/classes/" + cr.id, "PUT", { pass: "NUEVA77" }, B); PASS[cr.code] = "NUEVA77";
+assert.equal((await call("/me", "GET", null, tk)).s, 401);
+for (let i = 0; i < 70; i++) await call("/register?clase=" + cr.code, "POST", { name: "Alu " + i, password: "🐶🐱🐭", gender: "boy", faction: "Roca" }, null, null, "8.8." + i + ".1");
+assert.equal((await call("/public?clase=" + cr.code)).j.students.length, 60);
 console.log("ok");
