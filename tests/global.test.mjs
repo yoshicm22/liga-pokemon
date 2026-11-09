@@ -5,8 +5,10 @@ const src = new URL("../netlify/functions/api.mjs", import.meta.url), tmp = new 
 writeFileSync(tmp, readFileSync(src, "utf8").replace('"@netlify/blobs"', '"./blobs-memoria.mjs"'));
 const { default: h } = await import(tmp.href); const { mem } = await import("./blobs-memoria.mjs");
 
-const call = async (path, method = "GET", body, tok, cls, ip = "1.1.1.1") => {
+const PASS = {}; // código de clase → su contraseña (se añade sola a las rutas ?clase=)
+const call = async (path, method = "GET", body, tok, cls, ip = "1.1.1.1", pass) => {
   const headers = {}; if (tok) headers.authorization = "Bearer " + tok; if (cls) headers["x-class"] = cls;
+  const code = (path.match(/[?&]clase=([^&]*)/)?.[1] || "").toUpperCase(); pass ??= PASS[code]; if (pass) headers["x-clase-pass"] = pass;
   const r = await h(new Request("http://x/api" + path, { method, headers, body: body ? JSON.stringify(body) : undefined }), { ip });
   return { s: r.status, j: await r.json() };
 };
@@ -21,7 +23,22 @@ assert.equal((await call("/teacher/classes", "POST", { grade: 7, group: "A", sch
 const c4 = (await call("/teacher/classes", "POST", { grade: 4, group: "a", school: "CEIP Kanto" }, A)).j.class;
 const c5 = (await call("/teacher/classes", "POST", { grade: 5, group: "B", school: "CEIP Kanto" }, A)).j.class;
 const c1 = (await call("/teacher/classes", "POST", { grade: 1, group: "A", school: "Otro cole" }, B)).j.class;
-assert.equal(c4.group, "A"); assert.match(c4.code, /^[A-Z0-9]{6}$/);
+assert.equal(c4.group, "A"); assert.match(c4.code, /^[A-Z0-9]{6}$/); assert.match(c4.pass, /^[A-Z0-9]{5}$/);
+for (const c of [c4, c5, c1]) PASS[c.code] = c.pass;
+// sin la contraseña de la clase no se ve nada; mayúsculas o minúsculas da igual
+assert.equal((await call("/public?clase=" + c4.code, "GET", undefined, null, null, "1.1.1.1", "")).s, 403);
+assert.equal((await call("/public?clase=" + c4.code, "GET", undefined, null, null, "1.1.1.1", "MAL00")).s, 403);
+assert.equal((await call("/public?clase=" + c4.code, "GET", undefined, null, null, "1.1.1.1", c4.pass.toLowerCase())).s, 200);
+assert.equal((await call("/register?clase=" + c4.code, "POST", { name: "Intruso", password: "🐶🐱🐭", gender: "girl", faction: "Rayo" }, null, null, "1.1.1.1", "MAL00")).s, 403);
+// tras 60 fallos desde una red, ni la buena entra (así el 429 no delata cuál es la buena); otra red sí
+for (let i = 0; i < 61; i++) await call("/public?clase=" + c1.code, "GET", undefined, null, null, "6.6.6.6", "X" + i);
+assert.equal((await call("/public?clase=" + c1.code, "GET", undefined, null, null, "6.6.6.6")).s, 429);
+assert.equal((await call("/public?clase=" + c1.code, "GET", undefined, null, null, "7.7.7.7")).s, 200);
+// el profe cambia la contraseña: la vieja deja de valer
+assert.equal((await call("/teacher/classes/" + c5.id, "PUT", { pass: "ab" }, A)).s, 400);
+const c5p = (await call("/teacher/classes/" + c5.id, "PUT", { pass: "pika 55" }, A)).j.class; assert.equal(c5p.pass, "PIKA55");
+assert.equal((await call("/public?clase=" + c5.code)).s, 403); PASS[c5.code] = "PIKA55";
+assert.equal((await call("/public?clase=" + c5.code)).s, 200);
 // los alumnos entran con el código de su clase
 const reg = (code, name) => call("/register?clase=" + code, "POST", { name, password: "🐶🐱🐭", gender: "girl", faction: "Rayo" });
 assert.equal((await reg("NOEXISTE", "Ana")).s, 404);
@@ -87,7 +104,7 @@ assert.equal((await call("/me", "GET", null, pab2)).s, 200);
 const wrong = () => call("/login?clase=" + c5.code, "POST", { id: s1.profile.id, password: "❌❌❌" });
 for (let i = 0; i < 10; i++) assert.equal((await wrong()).s, 401);
 let lk = await wrong(); assert.equal(lk.s, 429); assert.match(JSON.stringify(lk.j), /3 min/);
-const rlk = [...mem.keys()].find((k) => k.startsWith("rl/") && JSON.parse(mem.get(k).d).lv === 1);
+const rlk = [...mem.keys()].findLast((k) => k.startsWith("rl/") && JSON.parse(mem.get(k).d).lv === 1);
 mem.set(rlk, { d: JSON.stringify({ ...JSON.parse(mem.get(rlk).d), until: Date.now() - 1 }), e: "x" });
 for (let i = 0; i < 10; i++) await wrong();
 lk = await wrong(); assert.equal(lk.s, 429); assert.match(JSON.stringify(lk.j), /6 min/);

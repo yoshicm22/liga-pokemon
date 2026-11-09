@@ -513,7 +513,7 @@
                             </button>
                             <button type="button" @click="playSound('click'); authTab = 'teacher'; teacherMode = 'register'; teacherErrorMsg = ''; showLanding = false; $nextTick(() => document.getElementById('km-prof-nombre')?.focus())" class="min-h-[56px] px-4 rounded-xl bg-emerald-700 text-white font-retro text-sm hover:bg-emerald-600">👩‍🏫 Crear una clase<span class="block text-xs font-mono font-normal">Profes: crea tu cuenta y tus clases</span></button>
                             <button type="button" @click="playSound('click'); authTab = 'teacher'; teacherMode = 'login'; teacherErrorMsg = ''; showLanding = false; $nextTick(() => document.getElementById('km-prof-mail')?.focus())" class="min-h-[56px] px-4 rounded-xl bg-slate-800 border-2 border-amber-600 text-amber-300 font-retro text-sm hover:border-amber-400">🔑 Entrar como profe<span class="block text-xs font-mono font-normal text-slate-300">Ya tengo cuenta</span></button>
-                            <button type="button" @click="playSound('click'); forgetClase(); authTab = 'select'; showLanding = false; $nextTick(() => document.getElementById('km-clase-codigo')?.focus())" class="min-h-[56px] px-4 rounded-xl bg-slate-800 border-2 border-slate-600 text-slate-100 font-retro text-sm hover:border-amber-400">➕ Añadir una clase<span class="block text-xs font-mono font-normal text-slate-300">Con el código que da el profe</span></button>
+                            <button type="button" @click="playSound('click'); forgetClase(); authTab = 'select'; showLanding = false; $nextTick(() => document.getElementById('km-clase-codigo')?.focus())" class="min-h-[56px] px-4 rounded-xl bg-slate-800 border-2 border-slate-600 text-slate-100 font-retro text-sm hover:border-amber-400">➕ Añadir una clase<span class="block text-xs font-mono font-normal text-slate-300">Con el código y la contraseña del profe</span></button>
                         </div>
                         <div class="bg-slate-950 p-6 rounded-xl border-2 border-red-500/80 space-y-3 font-mono text-sm">
                             <div class="flex items-center gap-3 text-red-400 font-retro">
@@ -591,13 +591,15 @@
                                                         </li>
                                                     </template>
                                                 </ul>
-                                                <p class="text-slate-300 pt-2">¿Otra clase? Añádela con su código:</p>
+                                                <p class="text-slate-300 pt-2">Toca tu clase y escribe su contraseña, o escribe el código de otra:</p>
                                             </div>
                                         </template>
                                         <label for="km-clase-codigo" class="block font-retro text-sm text-amber-300" x-text="misClases.length ? 'Código de la clase nueva' : 'Código de tu clase'">Código de tu clase</label>
-                                        <p id="km-clase-ayuda" class="text-slate-300">Te lo da tu profe. Son letras y números, por ejemplo K7M2QX.</p>
+                                        <p id="km-clase-ayuda" class="text-slate-300">Tu profe te da el código y la contraseña de la clase. Son letras y números, por ejemplo K7M2QX.</p>
                                         <input id="km-clase-codigo" type="text" x-model="claseInput" @input="claseInput = $event.target.value.toUpperCase()" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="km-clase-ayuda" class="w-full min-h-[64px] p-3 rounded bg-black/60 border-2 border-amber-500 text-amber-300 text-3xl text-center tracking-widest font-retro uppercase">
-                                        <button type="submit" @click.prevent="enterClase()" :disabled="claseBusy || !claseInput.trim()" class="w-full min-h-[56px] rounded-xl bg-emerald-700 text-white font-retro text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> Entrar</button>
+                                        <label for="km-clase-pass" class="block font-retro text-sm text-amber-300">Contraseña de la clase</label>
+                                        <input id="km-clase-pass" type="text" x-model="claseClaveInput" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" class="w-full min-h-[64px] p-3 rounded bg-black/60 border-2 border-amber-500 text-amber-300 text-3xl text-center tracking-widest font-retro uppercase">
+                                        <button type="submit" @click.prevent="enterClase()" :disabled="claseBusy || !claseInput.trim() || !claseClaveInput.trim()" class="w-full min-h-[56px] rounded-xl bg-emerald-700 text-white font-retro text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-50"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg> Entrar</button>
                                         <p class="text-sm text-red-300 text-center" role="alert" x-text="claseError"></p>
                                     </form>
                                 </template>
@@ -1440,6 +1442,8 @@
                             <div class="text-center bg-slate-950 rounded-xl border-2 border-slate-700 p-4 space-y-2">
                                 <p class="text-sm text-slate-300">Los alumnos entran con este código</p>
                                 <p class="font-retro text-4xl md:text-5xl text-amber-300 tracking-widest break-all select-all" x-text="teacherClass?.code"></p>
+                                <p class="text-sm text-slate-300">y esta contraseña de la clase</p>
+                                <p class="font-retro text-2xl md:text-3xl text-emerald-300 tracking-widest break-all select-all" x-text="teacherClass?.pass || '—'"></p>
                                 <p class="text-xs text-slate-400" x-text="claseTitle(teacherClass, ' ')"></p>
                                 <button type="button" @click="playSound('click'); newClassCode()" :disabled="classBusy" class="min-h-[48px] px-4 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 disabled:opacity-40">🔄 Código nuevo</button>
                             </div>
@@ -1452,6 +1456,9 @@
                                         <input id="km-ec-grupo" type="text" maxlength="10" autocomplete="off" x-model="classEdit.group" class="w-full min-h-[48px] px-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600 uppercase"></div>
                                     <div><label for="km-ec-cole" class="block text-slate-300 font-bold mb-1">Colegio:</label>
                                         <input id="km-ec-cole" type="text" maxlength="60" autocomplete="organization" x-model="classEdit.school" class="w-full min-h-[48px] px-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600"></div>
+                                    <div><label for="km-ec-pass" class="block text-slate-300 font-bold mb-1">Contraseña de la clase:</label>
+                                        <input id="km-ec-pass" type="text" maxlength="12" autocomplete="off" x-model="classEdit.pass" aria-describedby="km-ec-pass-ayuda" class="w-full min-h-[48px] px-3 rounded-lg bg-slate-800 text-slate-100 border border-slate-600 uppercase">
+                                        <p id="km-ec-pass-ayuda" class="text-xs text-slate-400 mt-1">De 4 a 12 letras o números.</p></div>
                                 </div>
                                 <button type="submit" @click.prevent="saveClass()" :disabled="classBusy" class="min-h-[48px] px-4 rounded-lg font-retro text-xs font-bold border border-slate-600 bg-slate-800 text-amber-300 hover:bg-slate-700 disabled:opacity-40">💾 Guardar datos</button>
                                 <p class="text-sm text-emerald-300" role="status" x-text="classMsg"></p>
@@ -2645,13 +2652,13 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 createErrorMsg: '',
                 teacherErrorMsg: '',
                 // alumnos: clase a la que entran (código guardado en el dispositivo)
-                claseCodigo: '', misClases: [], claseInfo: null, claseInput: '', claseError: '', claseBusy: false,
+                claseCodigo: '', claseClave: '', misClases: [], claseInfo: null, claseInput: '', claseClaveInput: '', claseError: '', claseBusy: false,
                 // profes: cuenta, sus clases y la elegida
                 teacherMode: 'login', teacherForm: { name: '', email: '', recovery: '', password: '' }, teacherBusy: false,
                 teacher: null, teacherClasses: [], teacherClassId: null,
                 classForm: { grade: 4, group: '', school: '' }, classFormMsg: '', classFormOk: '', classBusy: false, lastFile: null, printBlocked: false,
-                classEdit: { grade: 4, group: '', school: '' }, classMsg: '', moveSel: { id: '', to: '' },
-                cardsClass: { title: '', code: '' },
+                classEdit: { grade: 4, group: '', school: '', pass: '' }, classMsg: '', moveSel: { id: '', to: '' },
+                cardsClass: { title: '', code: '', pass: '' },
                 tutOpen: false, tutStep: 0, _tutBack: null,
                 tutSteps: [
                     { icon: '🏫', title: 'Crea tu clase', text: 'En «Tus clases» creas una clase por cada grupo, de 1º a 6º. Cada clase es independiente: sus alumnos, su pizarra y sus copias no se mezclan con las de otra. Con «Cambiar de clase» (arriba) pasas de una a otra.' },
@@ -3317,6 +3324,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     const headers = { 'Content-Type': 'application/json' };
                     if (this.token) headers['Authorization'] = 'Bearer ' + this.token;
                     if (this.currentRole === 'teacher' && this.teacherClassId) headers['X-Class'] = this.teacherClassId;
+                    else if (this.claseClave) headers['X-Clase-Pass'] = this.claseClave;
                     let res;
                     const ctl = new AbortController();
                     const to = setTimeout(() => ctl.abort(), 12000);
@@ -3358,7 +3366,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     try { if ('speechSynthesis' in window) speechSynthesis.getVoices(); } catch (e) {} // la lista de voces tarda: se pide pronto
                     let last = Date.now();
                     ['click', 'touchstart', 'keydown', 'mousemove'].forEach(ev => window.addEventListener(ev, () => { last = Date.now(); }, { passive: true }));
-                    try { this.claseCodigo = (localStorage.getItem('km-clase') || '').toUpperCase(); this.misClases = JSON.parse(localStorage.getItem('km-clases') || '[]').filter(c => c && typeof c.code === 'string').slice(0, 20); } catch (e) {}
+                    try { localStorage.removeItem('km-clase'); this.misClases = JSON.parse(localStorage.getItem('km-clases') || '[]').filter(c => c && typeof c.code === 'string').slice(0, 20); } catch (e) {}
                     await this.loadProfiles();
                     setInterval(() => {
                         if (this.currentRole === 'student' && Date.now() - last > 5 * 60 * 1000) {
@@ -3408,11 +3416,11 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                             this.claseInfo = data.class || null;
                             this.claseError = '';
                             this.saveMiClase(this.claseCodigo, this.claseTitle(this.claseInfo));
-                            try { localStorage.setItem('km-clase', this.claseCodigo); } catch (e) {}
                         }
                     } catch (e) {
                         console.error(e);
                         if (!prof && e.status === 404) { this.dropMiClase(this.claseCodigo); this.forgetClase(); this.claseError = e.message; this.$nextTick(() => document.getElementById('km-clase-codigo')?.focus()); }
+                        else if (!prof && (e.status === 403 || e.status === 429)) { const c = this.claseCodigo; this.forgetClase(); this.claseInput = c; this.claseError = e.message; this.$nextTick(() => document.getElementById('km-clase-pass')?.focus()); }
                         else if (!this.profilesList.length) this.loadError = true;
                     } finally {
                         this.loadingProfiles = false;
@@ -3441,10 +3449,10 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 claseQs(path) { return path + '?clase=' + encodeURIComponent(this.claseCodigo); },
                 claseTitle(c, sp = '') { if (!c) return ''; if (c.name) return c.name + ' · ' + c.grade + 'º' + sp + c.group; return c.grade + 'º' + sp + c.group + (c.school ? ' · ' + c.school : ''); },
                 async enterClase() {
-                    const c = this.claseInput.trim().toUpperCase();
-                    if (!c || this.claseBusy) return;
+                    const c = this.claseInput.trim().toUpperCase(), k = this.claseClaveInput.replace(/\s+/g, '').toUpperCase();
+                    if (!c || !k || this.claseBusy) return;
                     this.claseBusy = true; this.claseError = '';
-                    this.claseCodigo = c;
+                    this.claseCodigo = c; this.claseClave = k; this.claseClaveInput = '';
                     try { await this.loadProfiles(); } finally { this.claseBusy = false; }
                 },
                 // clases guardadas en este aparato (una tablet puede servir a varias clases)
@@ -3456,9 +3464,9 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.misClases = this.misClases.filter(c => c.code !== code);
                     try { localStorage.setItem('km-clases', JSON.stringify(this.misClases)); } catch (e) {}
                 },
-                openMiClase(code) { this.claseInput = code; this.enterClase(); },
+                openMiClase(code) { this.claseInput = code; this.claseError = ''; this.$nextTick(() => document.getElementById('km-clase-pass')?.focus()); },
                 forgetClase() {
-                    this.claseCodigo = ''; this.claseInfo = null; this.profilesList = []; this.selectedStudentForLogin = null;
+                    this.claseCodigo = ''; this.claseClave = ''; this.claseInfo = null; this.profilesList = []; this.selectedStudentForLogin = null;
                     try { localStorage.removeItem('km-clase'); } catch (e) {}
                 },
                 // --- cuenta del profe ---
@@ -3527,7 +3535,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                     this.teacherClassId = id;
                     try { localStorage.setItem('km-clase-profe', id); } catch (e) {}
                     const c = this.teacherClass;
-                    this.classEdit = { grade: c.grade, group: c.group, school: c.school };
+                    this.classEdit = { grade: c.grade, group: c.group, school: c.school, pass: c.pass || '' };
                     this.teacherTab = 'class';
                     window.scrollTo(0, 0);
                     await this.loadProfiles();
@@ -3559,14 +3567,14 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 // actualiza una clase de la lista con lo que devuelve el servidor
                 putClass(c) {
                     this.teacherClasses = this.teacherClasses.map(x => x.id === c.id ? c : x);
-                    if (c.id === this.teacherClassId) this.classEdit = { grade: c.grade, group: c.group, school: c.school };
+                    if (c.id === this.teacherClassId) this.classEdit = { grade: c.grade, group: c.group, school: c.school, pass: c.pass || '' };
                 },
                 async saveClass() {
                     if (this.classBusy || !this.teacherClass) return;
                     const f = this.classEdit;
                     this.classBusy = true; this.classMsg = '';
                     try {
-                        const d = await this.api('/teacher/classes/' + this.teacherClassId, 'PUT', { grade: f.grade, group: String(f.group).trim(), school: String(f.school).trim() });
+                        const d = await this.api('/teacher/classes/' + this.teacherClassId, 'PUT', { grade: f.grade, group: String(f.group).trim(), school: String(f.school).trim(), ...(f.pass ? { pass: String(f.pass) } : {}) });
                         this.putClass(d.class);
                         this.classMsg = 'Datos guardados.';
                     } catch (e) { this.notify(e.message); }
@@ -3693,7 +3701,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 async moveStudent() {
                     const s = this.profilesList.find(x => x.id === this.moveSel.id), to = this.teacherClasses.find(c => c.id === this.moveSel.to);
                     if (this.classBusy || !s || !to) return;
-                    if (!(await this.askConfirm('¿Pasar a ' + s.name + ' a ' + this.claseTitle(to, ' ') + '? Se lleva todo su progreso y su buzón. Para entrar tendrá que usar el código de la clase nueva.', '➡️ Pasar alumno'))) return;
+                    if (!(await this.askConfirm('¿Pasar a ' + s.name + ' a ' + this.claseTitle(to, ' ') + '? Se lleva todo su progreso y su buzón. Para entrar tendrá que usar el código y la contraseña de la clase nueva.', '➡️ Pasar alumno'))) return;
                     this.classBusy = true; this.classMsg = '';
                     const cid = this.teacherClassId;
                     try {
@@ -4218,7 +4226,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                             out.push({ name: s.name, code });
                         }
                     } catch (e) { this.notify(e.message + (out.length ? ' Ya se habían cambiado ' + out.length + ' códigos: se muestran las tarjetas hechas hasta ahora.' : '')); }
-                    if (out.length) { this.cards = out; this.cardsClass = { title: this.claseTitle(this.teacherClass, ' '), code: this.teacherClass.code }; this.showCards = true; }
+                    if (out.length) { this.cards = out; this.cardsClass = { title: this.claseTitle(this.teacherClass, ' '), code: this.teacherClass.code, pass: this.teacherClass.pass || '' }; this.showCards = true; }
                 },
                 nowServer() { return Date.now() + this.serverOffset; },
                 shortName(n) {
@@ -4760,7 +4768,7 @@ return {city:city,region:region,spin:spin,chest:chest,themes:CITIES.map(c=>c.th)
                 <p class="text-2xl font-extrabold my-2" x-text="c.name"></p>
                 <p class="text-5xl" x-text="c.code"></p>
                 <p class="text-xs mt-2">Tu código secreto 🔑</p>
-                <p class="text-xs mt-3 pt-2 border-t border-slate-300">Código de la clase <span x-text="cardsClass.title"></span>:<br><b class="text-xl tracking-widest" x-text="cardsClass.code"></b></p>
+                <p class="text-xs mt-3 pt-2 border-t border-slate-300">Código de la clase <span x-text="cardsClass.title"></span>:<br><b class="text-xl tracking-widest" x-text="cardsClass.code"></b><template x-if="cardsClass.pass"><span><br>Contraseña: <b class="tracking-widest" x-text="cardsClass.pass"></b></span></template></p>
             </div>
         </template>
     </div>
